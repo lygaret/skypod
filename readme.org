@@ -1,0 +1,39 @@
+#+TITLE: skypod
+#+AUTHOR: Jonathan Raphaelson
+#+EMAIL: jon@accidental.cc
+
+* Skypod
+
+An offline first RSS & Podcast PWA Application
+
+** Features
+
+- Local-first; sync and backup between devices p2p over WebRTC
+- RSS/Podcast subscription management
+- Podcast playback with modern audio features; skip silence, volume correction.
+
+** Project Structure
+
+This is an npm workspaces monorepo:
+
+#+BEGIN_SRC
+skypod/
+├── packages/
+│   ├── app/          # Frontend PWA application
+│   └── server/       # Backend API server
+├── package.json      # Root workspace configuration
+└── README.org
+#+END_SRC
+
+** Development
+
+*** Prerequisites
+
+- Node.js 23
+
+*** Setup
+
+#+BEGIN_SRC bash
+npm install
+npm run start
+#+END_SRC

@@ -2,17 +2,15 @@
 #+AUTHOR: Jonathan Raphaelson
 #+EMAIL: jon@accidental.cc
 
-* Skypod
-
 An offline first RSS & Podcast PWA Application
 
-** Features
+* Features
 
 - Local-first; sync and backup between devices p2p over WebRTC
 - RSS/Podcast subscription management
 - Podcast playback with modern audio features; skip silence, volume correction.
 
-** Project Structure
+* Project Structure
 
 This is an npm workspaces monorepo:
 
@@ -22,10 +20,10 @@ skypod/
 │   ├── app/          # Frontend PWA application
 │   └── server/       # Backend API server
 ├── package.json      # Root workspace configuration
-└── README.org
+└── readme.org
 #+END_SRC
 
-** Development
+* Development
 
 - Node.js 23
 
@@ -34,22 +32,22 @@ npm install
 npm run start
 #+END_SRC
 
-See [[devlog.org]] for more information.
+See [[./devlog.org]] for more information.
 
-*** Commands
+** Commands
 
-**** Development
+*** Development
 - =npm run start= - Start both app (port 7891) and server (port 7890) in development mode
 - =npm run build= - Build all workspaces
 - =npm run clean= - Clean all dist directories
 - =npm run lint= - Run linting across all workspaces
 - =npm run lint:fix= - Auto-fix lint issues across all workspaces
 
-**** Production
+*** Production
 - =npm run dist= - Build and prepare distribution (copies app dist to server dist)
 - =npm run dist:start= - Build distribution and start production server
 
-*** Dependencies
+** Dependencies
 
 - [[https://react.dev][React]] + [[https://zustand.docs.pmnd.rs][Zustand]] for UI
 - [[https://dexie.org/][Dexie]] for browser storage and syncing

@@ -1,0 +1,5 @@
+{
+  "name": "@skypod/server",
+  "version": "1.0.0",
+  "description": "Skypod RSS Proxy and WebRTC Signaling Server"
+}

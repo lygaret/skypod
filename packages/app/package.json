@@ -1,0 +1,5 @@
+{
+  "name": "@skypod/app",
+  "version": "1.0.0",
+  "description": "React/Dexie PWA for Skypod"
+}

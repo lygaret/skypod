@@ -1,0 +1,10 @@
+{
+  "name": "skypod",
+  "version": "1.0.0",
+  "description": "offline capable rss and podcast client",
+  "author": "Jon Raphaelson <jon@accidental.cc>",
+  "workspaces": [
+    "packages/app",
+    "packages/server"
+  ]
+}

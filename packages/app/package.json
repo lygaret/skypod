@@ -4,11 +4,13 @@
   "description": "React/Dexie PWA for Skypod",
 
   "scripts": {
-    "start": "vite",
+    "clean": "rm -rf dist/",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
+
     "lint": "eslint .",
-    "lint:fix": "eslint --fix ."
+    "lint:fix": "eslint --fix .",
+
+    "start": "vite"
   },
 
   "dependencies": {

@@ -27,13 +27,31 @@ skypod/
 
 ** Development
 
-*** Prerequisites
-
 - Node.js 23
-
-*** Setup
 
 #+BEGIN_SRC bash
 npm install
 npm run start
 #+END_SRC
+
+See [[devlog.org]] for more information.
+
+*** Commands
+
+**** Development
+- =npm run start= - Start both app (port 7891) and server (port 7890) in development mode
+- =npm run build= - Build all workspaces
+- =npm run clean= - Clean all dist directories
+- =npm run lint= - Run linting across all workspaces
+- =npm run lint:fix= - Auto-fix lint issues across all workspaces
+
+**** Production
+- =npm run dist= - Build and prepare distribution (copies app dist to server dist)
+- =npm run dist:start= - Build distribution and start production server
+
+*** Dependencies
+
+- [[https://react.dev][React]] + [[https://zustand.docs.pmnd.rs][Zustand]] for UI
+- [[https://dexie.org/][Dexie]] for browser storage and syncing
+- [[https://peerjs.com/][PeerJS]] for WebRTC sync
+- Vite, Typescript, whatever

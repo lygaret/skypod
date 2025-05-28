@@ -1,0 +1,40 @@
+* standards
+- use 2 spaces for indentation
+
+* design
+** frontend (packages/app)
+- http://localhost:7891
+- proxies ~/api~ and ~/sync~ to the backend in development
+- uses Dexie for local storage with sync plugin
+- custom sync replication implementation using PeerJS through the signalling server
+
+** backend (packages/server)
+- http://localhost:7890
+- serves ~/dist~ if the directory is present (see ~dist~ script)
+- serves ~/api~ for RSS caching proxy
+  - file-based routing under the api directory
+- serves ~/sync~ which is a ~peerjs~ signalling server
+
+** sync
+*** peer connection
+- on startup, check for current realm-id and key pair
+- if not present, ask to login or start new
+  - if login, run through the [[pairing]] process
+  - if start new, run through the [[registration]] process
+- use keypair to authenticate to server
+  - response includes list of active peers to connect
+- clients negotiate sync from there
+
+**** TODO pairing
+**** TODO registration
+
+*** sync
+- each client keeps the full data set
+- dexie sync and observable let us stream change sets
+- we can publish the "latest" to all peers
+- on first pull, if not the first client, we can request a dump out of band
+
+* journal
+** 2025
+*** May 28
+getting everything setup

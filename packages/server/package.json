@@ -1,5 +1,27 @@
 {
   "name": "@skypod/server",
   "version": "1.0.0",
-  "description": "Skypod RSS Proxy and WebRTC Signaling Server"
+  "description": "Skypod RSS Proxy and WebRTC Signaling Server",
+  "entryPoint": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm-run-all -l build -p 'start:**'",
+    "start:build": "tsc -i --watch --preserveWatchOutput",
+    "start:server": "nodemon --inspect --trace-warnings --no-experimental-strip-types dist/index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-file-routing": "^3.1.0",
+    "peer": "^1.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@tsconfig/node23": "^23.0.2",
+    "globals": "^16.2.0",
+    "nodemon": "^3.1.10",
+    "npm-run-all2": "^8.0.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0"
+  }
 }

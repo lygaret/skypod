@@ -1,0 +1,16 @@
+{
+  "extends": "@tsconfig/node23/tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../../node_modules/.tmp/server/tsconfig.tsbuildinfo",
+    "outDir": "./dist",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+
+  "include": ["."]
+}

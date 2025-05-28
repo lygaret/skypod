@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "offline capable rss and podcast client",
   "author": "Jon Raphaelson <jon@accidental.cc>",
+  "scripts": {
+    "start": "npm run --workspaces --if-present start",
+    "build": "npm run --workspaces --if-present build",
+    "preview": "npm run --workspaces --if-present preview",
+
+    "lint": "npm run --workspaces --if-present lint",
+    "lint:fix": "npm run --workspaces --if-present lint:fix"
+  },
   "workspaces": [
     "packages/app",
     "packages/server"

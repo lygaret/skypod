@@ -10,6 +10,7 @@
     "start": "vite"
   },
   "dependencies": {
+    "nanoid": "^3.3.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "ts-deepmerge": "^7.0.3",

@@ -116,7 +116,7 @@ goal of server backup mode is that we can go from email->fully working client wi
 - when writing to the devlog, add tags to your entries specifying ~:ai:~ and what tool did it.
 - false starts and prototypes are in ~./devlog/~
 
-* journal [0/10]
+* journal [0/11]
 ** <2025-05-28 Wed>
 getting everything setup
 
@@ -269,6 +269,236 @@ designed caching system for when upstream feeds fail/disappear, building on exis
 - historical feed state preservation (feeds disappear!)
 - true offline operation after initial sync
 - deduplication across time and users
+
+** <2025-05-29 Thu>                                               :ai:claude:
+e2e encryption and invitation flow design
+
+worked through the crypto and invitation architecture. key decisions:
+
+*** keypair strategy
+- use jwk format for interoperability (server stores public keys)
+- ed25519 for signing, separate x25519 for encryption if needed
+- zustand lazy initialization pattern: ~ensureKeypair()~ on first use
+- store private jwk in persisted zustand state
+
+*** invitation flow: dual-jwt approach
+solved the chicken-and-egg problem of sharing encryption keys securely.
+
+**** qr code contains two signed jwts:
+1. invitation token: ~{iss: inviter_fingerprint, sub: invitation_id, purpose: "realm_invite"}~
+2. encryption key token: ~{iss: inviter_fingerprint, ephemeral_private: base64_key, purpose: "ephemeral_key"}~
+
+**** exchange process:
+1. invitee posts jwt1 + their public keys to ~/invitations~
+2. server verifies jwt1 signature against realm members
+3. if valid: adds invitee to realm, returns ~{realm_id, realm_members, encrypted_realm_key}~
+4. invitee verifies jwt2 signature against returned realm members
+5. invitee extracts ephemeral private key, decrypts realm encryption key
+
+**** security properties:
+- server never has decryption capability (missing ephemeral private key)
+- both jwts must be signed by verified realm member
+- if first exchange fails, second jwt is cryptographically worthless
+- atomic operation: identity added only if invitation valid
+- built-in expiration and tamper detection via jwt standard
+
+**** considered alternatives:
+- raw ephemeral keys in qr: simpler but no authenticity
+- ecdh key agreement: chicken-and-egg problem with public key exchange  
+- server escrow: good but missing authentication layer
+- password-based: requires secure out-of-band sharing
+
+the dual-jwt approach provides proper authenticated invitations while maintaining e2e encryption properties.
+
+**** refined dual-jwt with ephemeral signing
+simplified the approach by using ephemeral key for second jwt signature:
+
+**setup**:
+1. inviter generates ephemeral keypair
+2. encrypts realm key with ephemeral private key  
+3. posts to server: ~{invitation_id, realm_id, ephemeral_public, encrypted_realm_key}~
+
+**qr code contains**:
+#+BEGIN_SRC json
+// JWT 1: signed with inviter's realm signing key
+{
+  "realm_id": "uuid",
+  "invitation_id": "uuid", 
+  "iss": "inviter_fingerprint"
+}
+
+// JWT 2: signed with ephemeral private key
+{
+  "ephemeral_private": "base64_key",
+  "invitation_id": "uuid"
+}
+#+END_SRC
+
+**exchange flow**:
+1. submit jwt1 → server verifies against realm members → returns ~{invitation_id, realm_id, ephemeral_public, encrypted_realm_key}~
+2. verify jwt2 signature using ~ephemeral_public~ from server response
+3. extract ~ephemeral_private~ from jwt2, decrypt realm key
+
+**benefits over previous version**:
+- no premature key disclosure (invitee keys shared via normal webrtc peering)
+- self-contained verification (ephemeral public key verifies jwt2)
+- cleaner separation of realm auth vs encryption key distribution
+- simpler flow (no need to return realm member list)
+
+**crypto verification principle**: digital signatures work as sign-with-private/verify-with-public, while encryption works as encrypt-with-public/decrypt-with-private. jwt2 verification uses signature verification, not decryption.
+
+**invitation flow diagram**:
+#+BEGIN_SRC mermaid
+sequenceDiagram
+    participant I as Inviter
+    participant S as Server
+    participant E as Invitee
+    
+    Note over I: Generate ephemeral keypair
+    I->>I: ephemeral_private, ephemeral_public
+    
+    Note over I: Encrypt realm key
+    I->>I: encrypted_realm_key = encrypt(realm_key, ephemeral_private)
+    
+    I->>S: POST /invitations<br/>{invitation_id, realm_id, ephemeral_public, encrypted_realm_key}
+    S-->>I: OK
+    
+    Note over I: Create JWTs for QR code
+    I->>I: jwt1 = sign({realm_id, invitation_id}, inviter_private)
+    I->>I: jwt2 = sign({ephemeral_private, invitation_id}, ephemeral_private)
+    
+    Note over I,E: QR code contains [jwt1, jwt2]
+    
+    E->>S: POST /invitations/exchange<br/>{jwt1}
+    Note over S: Verify jwt1 signature<br/>against realm members
+    S-->>E: {invitation_id, realm_id, ephemeral_public, encrypted_realm_key}
+    
+    Note over E: Verify jwt2 signature<br/>using ephemeral_public
+    E->>E: verify_signature(jwt2, ephemeral_public)
+    
+    Note over E: Extract key and decrypt
+    E->>E: ephemeral_private = decode(jwt2)
+    E->>E: realm_key = decrypt(encrypted_realm_key, ephemeral_private)
+    
+    Note over E: Now member of realm!
+#+END_SRC
+
+**** jwk keypair generation and validation                       :ai:claude:
+
+discussed jwk vs raw crypto.subtle for keypair storage. since public keys need server storage for realm authorization, jwk is better for interoperability.
+
+**keypair generation**:
+#+BEGIN_SRC typescript
+const keypair = await crypto.subtle.generateKey(
+  { name: "Ed25519" },
+  true,
+  ["sign", "verify"]
+);
+
+const publicJWK = await crypto.subtle.exportKey("jwk", keypair.publicKey);
+const privateJWK = await crypto.subtle.exportKey("jwk", keypair.privateKey);
+
+// JWK format:
+{
+  "kty": "OKP",
+  "crv": "Ed25519", 
+  "x": "base64url-encoded-public-key",
+  "d": "base64url-encoded-private-key" // only in private JWK
+}
+#+END_SRC
+
+**client validation**:
+#+BEGIN_SRC typescript
+function isValidEd25519PublicJWK(jwk: any): boolean {
+  return (
+    typeof jwk === 'object' &&
+    jwk.kty === 'OKP' &&
+    jwk.crv === 'Ed25519' &&
+    typeof jwk.x === 'string' &&
+    jwk.x.length === 43 && // base64url Ed25519 public key length
+    !jwk.d && // public key shouldn't have private component
+    !jwk.use || jwk.use === 'sig'
+  );
+}
+
+async function validatePublicKey(publicJWK: JsonWebKey): Promise<CryptoKey | null> {
+  try {
+    if (!isValidEd25519PublicJWK(publicJWK)) return null;
+    
+    const key = await crypto.subtle.importKey(
+      'jwk',
+      publicJWK,
+      { name: 'Ed25519' },
+      false,
+      ['verify']
+    );
+    
+    return key;
+  } catch {
+    return null;
+  }
+}
+#+END_SRC
+
+**server validation (node.js)**:
+#+BEGIN_SRC typescript
+import { webcrypto } from 'node:crypto';
+
+async function validateClientPublicKey(publicJWK: JsonWebKey): Promise<boolean> {
+  try {
+    if (!isValidEd25519PublicJWK(publicJWK)) return false;
+    
+    await webcrypto.subtle.importKey(
+      'jwk',
+      publicJWK,
+      { name: 'Ed25519' },
+      false,
+      ['verify']
+    );
+    
+    return true;
+  } catch {
+    return false;
+  }
+}
+#+END_SRC
+
+**authentication flow**:
+#+BEGIN_SRC typescript
+// client signs message
+const authMessage = {
+  realm: 'uuid-here',
+  timestamp: Date.now(),
+  action: 'join'
+};
+
+const signature = await crypto.subtle.sign(
+  'Ed25519',
+  privateKey,
+  new TextEncoder().encode(JSON.stringify(authMessage))
+);
+
+// server verifies
+async function verifyAuth(req: AuthRequest): Promise<boolean> {
+  const publicKey = await webcrypto.subtle.importKey(
+    'jwk',
+    req.publicKey,
+    { name: 'Ed25519' },
+    false,
+    ['verify']
+  );
+  
+  const messageBytes = new TextEncoder().encode(JSON.stringify(req.message));
+  const signatureBytes = new Uint8Array(req.signature);
+  
+  return await webcrypto.subtle.verify(
+    'Ed25519',
+    publicKey,
+    signatureBytes,
+    messageBytes
+  );
+}
+#+END_SRC
 
 **** proposed schemas                                             :ai:claude:
 

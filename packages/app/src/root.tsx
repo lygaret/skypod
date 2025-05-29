@@ -1,7 +1,6 @@
 import React from "react"
 import { useRealmStore } from "./stores"
 import { useIdentStore } from "./stores"
-import { fingerprintPublicKey } from "./stores/ident-keys"
 
 export const Root: React.FC = () => {
   const realm = useRealmStore()
@@ -17,17 +16,6 @@ export const Root: React.FC = () => {
     }
   }
 
-  const generate = async () => {
-    try {
-      const i = await ident.ensure();
-      const f = await fingerprintPublicKey(i.keypair)
-      console.log('got fingerprint!', f)
-    }
-    catch (e) {
-      console.error('got error', e);
-    }
-  };
-
   return (
     <>
       <React.Suspense fallback={<>Loading...</>}>
@@ -36,7 +24,7 @@ export const Root: React.FC = () => {
 
       <h1>Hello, World</h1>
       <p>What's up?</p>
-      <button onClick={generate}>Generate</button>
+      <pre>{JSON.stringify(ident, null, 4)}</pre>
       <button onClick={startNew}>Start Realm</button>
     </>
   )

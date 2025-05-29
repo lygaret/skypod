@@ -7,6 +7,7 @@ mkdir -p _site
 # Copy CSS to output directory
 cat \
     .github/workflows/publish-pages/org-export.css \
+    .github/workflows/publish-pages/org-htmlize.css \
     > _site/style.css
 
 # Function to process org files

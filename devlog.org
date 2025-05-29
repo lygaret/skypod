@@ -1,4 +1,5 @@
 * design
+
 ** frontend (packages/app)
 - http://localhost:7891
 - proxies ~/api~ and ~/sync~ to the backend in development
@@ -13,7 +14,6 @@
 - serves ~/sync~ which is a ~peerjs~ signalling server
 
 ** sync
-
 - each client keeps the full data set
 - dexie sync and observable let us stream change sets
 - we can publish the "latest" to all peers
@@ -25,9 +25,12 @@
   - but feeds go away, and some will only show recent stories
     - so yes, we'll need this
   - but server side, we can dedupe
+    - content-addressed server-side cache?
 
 - server side does RSS pulling
   - can feeds be marked private, such that they won't be pulled through the proxy?
+  - but then we require everything to be fetchable via cors
+    - client configured proxy settings?
 
 *** peer connection
 - on startup, check for current realm-id and key pair
@@ -106,10 +109,9 @@ goal of server backup mode is that we can go from email->fully working client wi
   - should we use an indexdb shim so we can import/export from the server for clean start?
   - how much materialization does the server need?
 
-
 * ai instructions
-- use 2 spaces for indentation
 - when writing to the devlog, add tags to your entries specifying ~:ai:~ and what tool did it.
+- false starts and prototypes are in ~./devlog/~
 
 * journal
 ** 2025
@@ -167,3 +169,290 @@ discussed the sync architecture and dexie conflict handling:
 - feed state: refresh timestamps, error states
 
 **approach**: prefer "events not state" pattern and device-specific records where semantic conflicts are likely
+
+**** data model brainstorm                                        :ai:claude:
+
+core entities designed with sync in mind:
+
+**Feed** - RSS/podcast subscription
+- parent_path field for folder structure ("/Tech/Programming")
+- is_private flag to skip server proxy
+- refresh_interval for custom update frequencies
+
+**Episode** - individual podcast episodes
+- standard RSS metadata (guid, title, description, media url)
+- duration and file info for playback
+
+**PlayRecord** - device-specific playback state
+- separate record per device_id to avoid timestamp conflicts
+- position, completed status, playback speed
+- UI can prompt "continue from X device?" for resolution
+
+**QueueItem** - device-specific episode queue
+- ordered list with position field
+- device_id scoped to avoid queue conflicts
+
+**Subscription** - feed membership settings
+- can be global or device-specific
+- auto_download preferences per device
+
+**Settings** - split global vs device-local
+- theme, default speed = global
+- download path, audio device = device-local
+
+**Event tables** for complex operations:
+- FeedMoveEvent for folder reorganization
+- BulkMarkPlayedEvent for "mark all read" operations
+- better conflict resolution than direct state updates
+
+**sync considerations**:
+- device identity established on first run
+- dexie syncable handles basic timestamp conflicts
+- prefer device-scoped records for semantic conflicts
+- event-driven pattern for bulk operations
+
+**** schema evolution from previous iteration                     :ai:claude:
+
+reviewed existing schema from tmp/feed.ts - well designed foundation:
+
+**keep from original**:
+- Channel/ChannelEntry naming and structure
+- refreshHP adaptive refresh system (much better than simple intervals)
+- rich podcast metadata (people, tags, enclosure, podcast object)
+- HTTP caching with etag/status tracking
+- epoch millisecond timestamps
+- hashId() approach for entry IDs
+
+**add for multi-device sync**:
+- PlayState table (device-scoped position/completion)
+- Subscription table (with parentPath for folders, device-scoped settings)
+- QueueItem table (device-scoped episode queues)
+- Device table (identity management)
+
+**migration considerations**:
+- existing Channel/ChannelEntry can be preserved
+- new tables are additive
+- fetchAndUpsert method works well with server proxy architecture
+- dexie sync vs rxdb - need to evaluate change tracking capabilities
+
+**** content-addressed caching for offline resilience              :ai:claude:
+
+designed caching system for when upstream feeds fail/disappear, building on existing cache-schema.ts:
+
+**server-side schema evolution** (drizzle sqlite):
+- keep existing httpCacheTable design (health tracking, http headers, ttl)
+- add contentHash field pointing to deduplicated content
+- new contentStoreTable: deduplicated blobs by sha256 hash
+- new contentHistoryTable: url -> contentHash timeline with isLatest flag
+- reference counting for garbage collection
+
+**client-side OPFS storage**:
+- /cache/content/{contentHash}.xml for raw feeds
+- /cache/media/{contentHash}.mp3 for podcast episodes
+- LocalCacheEntry metadata tracks expiration and offline-only flags
+- maintains last N versions per feed for historical access
+
+**fetch strategy & fallback**:
+1. check local OPFS cache first (fastest)
+2. try server proxy /api/feed?url={feedUrl} (deduplicated)
+3. server checks contentHistory, serves latest or fetches upstream
+4. server returns {contentHash, content, cached: boolean}
+5. client stores with content hash as filename
+6. emergency mode: serve stale content when upstream fails
+
+**benefits**:
+- preserves existing health tracking and HTTP caching logic
+- popular feeds cached once on server, many clients benefit
+- bandwidth savings via content hash comparison
+- historical feed state preservation (feeds disappear!)
+- true offline operation after initial sync
+- deduplication across time and users
+
+**** proposed schemas                                              :ai:claude:
+
+**client-side schema (dexie)**:
+
+#+BEGIN_SRC typescript
+// Core RSS/Podcast data (from your existing design)
+interface Channel {
+  id: string;
+  feedUrl: string;
+  htmlUrl?: string;
+  imageUrl?: string;
+  title?: string;
+  description?: string;
+  language?: string;
+  people?: Record<string, string>;
+  tags?: string[];
+
+  // Refresh management
+  refreshHP: number;
+  nextRefreshAt?: number;
+  lastRefreshAt?: number;
+  lastRefreshStatus?: string;
+  lastRefreshHttpStatus?: number;
+  lastRefreshHttpEtag?: string;
+
+  // Cache info
+  contentHash?: string;
+  lastFetchedAt?: number;
+}
+
+interface ChannelEntry {
+  id: string;
+  channelId: string;
+  guid: string;
+  title: string;
+  linkUrl?: string;
+  imageUrl?: string;
+  snippet?: string;
+  content?: string;
+
+  enclosure?: {
+    url: string;
+    type?: string;
+    length?: number;
+  };
+
+  podcast?: {
+    explicit?: boolean;
+    duration?: string;
+    seasonNum?: number;
+    episodeNum?: number;
+    transcriptUrl?: string;
+  };
+
+  publishedAt?: number;
+  fetchedAt?: number;
+}
+
+// Device-specific sync tables
+interface PlayRecord {
+  id: string;
+  entryId: string;
+  deviceId: string;
+  position: number;
+  duration?: number;
+  completed: boolean;
+  speed: number;
+  updatedAt: number;
+}
+
+interface Subscription {
+  id: string;
+  channelId: string;
+  deviceId?: string;
+  parentPath: string;  // "/Tech/Programming"
+  autoDownload: boolean;
+  downloadLimit?: number;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface QueueItem {
+  id: string;
+  entryId: string;
+  deviceId: string;
+  position: number;
+  addedAt: number;
+}
+
+interface Device {
+  id: string;
+  name: string;
+  platform: string;
+  lastSeen: number;
+}
+
+// Local cache metadata
+interface LocalCache {
+  id: string;
+  url: string;
+  contentHash: string;
+  filePath: string;    // OPFS path
+  cachedAt: number;
+  expiresAt?: number;
+  size: number;
+  isOfflineOnly: boolean;
+}
+
+// Dexie schema
+const db = new Dexie('SkypodDB');
+db.version(1).stores({
+  channels: '&id, feedUrl, contentHash',
+  channelEntries: '&id, channelId, publishedAt',
+  playRecords: '&id, [entryId+deviceId], deviceId, updatedAt',
+  subscriptions: '&id, channelId, deviceId, parentPath',
+  queueItems: '&id, entryId, deviceId, position',
+  devices: '&id, lastSeen',
+  localCache: '&id, url, contentHash, expiresAt'
+});
+#+END_SRC
+
+**server-side schema**:
+
+#+BEGIN_SRC typescript
+// Content-addressed cache
+interface ContentStore {
+  contentHash: string;     // Primary key
+  content: Buffer;         // Raw feed content
+  contentType: string;
+  contentLength: number;
+  firstSeenAt: number;
+  referenceCount: number;
+}
+
+interface ContentHistory {
+  id: string;
+  url: string;
+  contentHash: string;
+  fetchedAt: number;
+  isLatest: boolean;
+}
+
+// HTTP cache with health tracking (from your existing design)
+interface HttpCache {
+  key: string;             // URL hash, primary key
+  url: string;
+
+  status: 'alive' | 'dead';
+  lastFetchedAt: number;
+  lastFetchError?: string;
+  lastFetchErrorStreak: number;
+
+  lastHttpStatus: number;
+  lastHttpEtag?: string;
+  lastHttpHeaders: Record<string, string>;
+  expiresAt: number;
+  expirationTtl: number;
+
+  contentHash: string;     // Points to ContentStore
+}
+
+// Sync/auth tables
+interface Realm {
+  id: string;              // UUID
+  createdAt: number;
+  verifiedKeys: string[];  // Public key list
+}
+
+interface PeerConnection {
+  id: string;
+  realmId: string;
+  publicKey: string;
+  lastSeen: number;
+  isOnline: boolean;
+}
+
+// Media cache for podcast episodes
+interface MediaCache {
+  contentHash: string;     // Primary key
+  originalUrl: string;
+  mimeType: string;
+  fileSize: number;
+  content: Buffer;
+  cachedAt: number;
+  accessCount: number;
+}
+#+END_SRC

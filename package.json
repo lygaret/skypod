@@ -3,19 +3,15 @@
   "version": "1.0.0",
   "description": "offline capable rss and podcast client",
   "author": "Jon Raphaelson <jon@accidental.cc>",
-
   "scripts": {
     "clean": "rm -rf dist && npm run --workspaces --if-present clean",
     "build": "npm run --workspaces --if-present build",
     "lint": "npm run --workspaces --if-present lint",
     "lint:fix": "npm run --workspaces --if-present lint:fix",
-
     "start": "npm run --workspace=packages/server start & npm run --workspace=packages/app start",
-
     "dist": "npm run build && cp -R packages/server/dist . && cp -R packages/app/dist dist/",
     "dist:start": "npm run dist && node dist/index.js"
   },
-
   "type": "module",
   "workspaces": [
     "packages/app",

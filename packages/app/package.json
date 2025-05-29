@@ -2,20 +2,18 @@
   "name": "@skypod/app",
   "version": "1.0.0",
   "description": "React/Dexie PWA for Skypod",
-
   "scripts": {
     "clean": "rm -rf dist/",
     "build": "tsc -b && vite build",
-
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-
     "start": "vite"
   },
-
   "dependencies": {
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "ts-deepmerge": "^7.0.3",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",

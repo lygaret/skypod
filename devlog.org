@@ -304,7 +304,7 @@ solved the chicken-and-egg problem of sharing encryption keys securely.
 
 **** considered alternatives:
 - raw ephemeral keys in qr: simpler but no authenticity
-- ecdh key agreement: chicken-and-egg problem with public key exchange  
+- ecdh key agreement: chicken-and-egg problem with public key exchange
 - server escrow: good but missing authentication layer
 - password-based: requires secure out-of-band sharing
 
@@ -315,7 +315,7 @@ simplified the approach by using ephemeral key for second jwt signature:
 
 **setup**:
 1. inviter generates ephemeral keypair
-2. encrypts realm key with ephemeral private key  
+2. encrypts realm key with ephemeral private key
 3. posts to server: ~{invitation_id, realm_id, ephemeral_public, encrypted_realm_key}~
 
 **qr code contains**:
@@ -323,7 +323,7 @@ simplified the approach by using ephemeral key for second jwt signature:
 // JWT 1: signed with inviter's realm signing key
 {
   "realm_id": "uuid",
-  "invitation_id": "uuid", 
+  "invitation_id": "uuid",
   "iss": "inviter_fingerprint"
 }
 
@@ -353,33 +353,33 @@ sequenceDiagram
     participant I as Inviter
     participant S as Server
     participant E as Invitee
-    
+
     Note over I: Generate ephemeral keypair
     I->>I: ephemeral_private, ephemeral_public
-    
+
     Note over I: Encrypt realm key
     I->>I: encrypted_realm_key = encrypt(realm_key, ephemeral_private)
-    
+
     I->>S: POST /invitations<br/>{invitation_id, realm_id, ephemeral_public, encrypted_realm_key}
     S-->>I: OK
-    
+
     Note over I: Create JWTs for QR code
     I->>I: jwt1 = sign({realm_id, invitation_id}, inviter_private)
     I->>I: jwt2 = sign({ephemeral_private, invitation_id}, ephemeral_private)
-    
+
     Note over I,E: QR code contains [jwt1, jwt2]
-    
+
     E->>S: POST /invitations/exchange<br/>{jwt1}
     Note over S: Verify jwt1 signature<br/>against realm members
     S-->>E: {invitation_id, realm_id, ephemeral_public, encrypted_realm_key}
-    
+
     Note over E: Verify jwt2 signature<br/>using ephemeral_public
     E->>E: verify_signature(jwt2, ephemeral_public)
-    
+
     Note over E: Extract key and decrypt
     E->>E: ephemeral_private = decode(jwt2)
     E->>E: realm_key = decrypt(encrypted_realm_key, ephemeral_private)
-    
+
     Note over E: Now member of realm!
 #+END_SRC
 
@@ -401,7 +401,7 @@ const privateJWK = await crypto.subtle.exportKey("jwk", keypair.privateKey);
 // JWK format:
 {
   "kty": "OKP",
-  "crv": "Ed25519", 
+  "crv": "Ed25519",
   "x": "base64url-encoded-public-key",
   "d": "base64url-encoded-private-key" // only in private JWK
 }
@@ -424,7 +424,7 @@ function isValidEd25519PublicJWK(jwk: any): boolean {
 async function validatePublicKey(publicJWK: JsonWebKey): Promise<CryptoKey | null> {
   try {
     if (!isValidEd25519PublicJWK(publicJWK)) return null;
-    
+
     const key = await crypto.subtle.importKey(
       'jwk',
       publicJWK,
@@ -432,7 +432,7 @@ async function validatePublicKey(publicJWK: JsonWebKey): Promise<CryptoKey | nul
       false,
       ['verify']
     );
-    
+
     return key;
   } catch {
     return null;
@@ -447,7 +447,7 @@ import { webcrypto } from 'node:crypto';
 async function validateClientPublicKey(publicJWK: JsonWebKey): Promise<boolean> {
   try {
     if (!isValidEd25519PublicJWK(publicJWK)) return false;
-    
+
     await webcrypto.subtle.importKey(
       'jwk',
       publicJWK,
@@ -455,7 +455,7 @@ async function validateClientPublicKey(publicJWK: JsonWebKey): Promise<boolean> 
       false,
       ['verify']
     );
-    
+
     return true;
   } catch {
     return false;
@@ -487,10 +487,10 @@ async function verifyAuth(req: AuthRequest): Promise<boolean> {
     false,
     ['verify']
   );
-  
+
   const messageBytes = new TextEncoder().encode(JSON.stringify(req.message));
   const signatureBytes = new Uint8Array(req.signature);
-  
+
   return await webcrypto.subtle.verify(
     'Ed25519',
     publicKey,

@@ -1,8 +1,29 @@
+; Initialize package system
+(require 'package)
+
+;; Add package archives
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'package-archives '("gnu" . "https://elpa.gnu.org/packages/") t)
+
+;; Initialize packages
 (package-initialize)
+
+;; Refresh package contents if needed
+(unless package-archive-contents
+  (package-refresh-contents))
+
+;; Install or update htmlize
+(unless (package-installed-p 'htmlize)
+  (package-install 'htmlize))
+
+;; For updating existing packages
+(when (package-installed-p 'htmlize)
+  (package-reinstall 'htmlize))
 
 ;; Configure org-mode export
 (require 'org)
 (require 'ox-html)
+(require 'htmlize)
           
 ;; Set up HTML export options
 (setq 

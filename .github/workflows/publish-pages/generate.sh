@@ -16,7 +16,7 @@ process_org_file() {
     local output_file="_site/${base_name}.html"
 
     echo "Processing: $org_file -> $output_file"
-    emacs --batch --load .github/workflows/publish-pages/org-export.el "$org_file"
+    emacs -Q --batch --load .github/workflows/publish-pages/org-export.el "$org_file"
 
     # Move the generated HTML file to the output directory
     if [ -f "${org_file%.org}.html" ]; then

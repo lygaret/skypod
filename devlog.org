@@ -1,6 +1,3 @@
-* standards
-- use 2 spaces for indentation
-
 * design
 ** frontend (packages/app)
 - http://localhost:7891
@@ -16,25 +13,157 @@
 - serves ~/sync~ which is a ~peerjs~ signalling server
 
 ** sync
-*** peer connection
-- on startup, check for current realm-id and key pair
-- if not present, ask to login or start new
-  - if login, run through the [[pairing]] process
-  - if start new, run through the [[registration]] process
-- use keypair to authenticate to server
-  - response includes list of active peers to connect
-- clients negotiate sync from there
 
-**** TODO pairing
-**** TODO registration
-
-*** sync
 - each client keeps the full data set
 - dexie sync and observable let us stream change sets
 - we can publish the "latest" to all peers
 - on first pull, if not the first client, we can request a dump out of band
 
+*** rss feed data
+- do we want to backup feed data?
+  - conceptually, this should be refetchable
+  - but feeds go away, and some will only show recent stories
+    - so yes, we'll need this
+  - but server side, we can dedupe
+
+- server side does RSS pulling
+  - can feeds be marked private, such that they won't be pulled through the proxy?
+
+*** peer connection
+- on startup, check for current realm-id and key pair
+- if not present, ask to login or start new
+  - if login, run through the [[* pairing]] process
+  - if start new, run through the [[* registration]] process
+- use keypair to authenticate to server
+  - response includes list of active peers to connect
+- clients negotiate sync from there
+- an identity is a keypair and a realm
+
+- realm is uuid
+  - realm on the server is the socket connection for peer discovery
+    - keeps a list of verified public keys
+    - and manages the /current/ ~public-key->peer ids~ mapping
+  - realm on the client side is first piece of info required for sync
+    - when connecting to the signalling server, you present a realm, and a signed public key
+    - server accepts/rejects based on signature and current verified keys
+
+- a new keypair can create a realm
+
+- a new keypair can double sign an invitation
+  - invite = ~{ realm:, nonce:, not_before:, not_after:, authorizer: }~, signed with verified key
+  - exchanging an invite = ~{ invite: }~, signed with my key
+
+- on startup
+  - start stand-alone (no syncing required, usually the case on first-run)
+    - generate a keypair
+    - want server backup?
+      - sign a "setup" message with new keypair and send to the server
+      - server responds with a new realm, that this keypair is already verified for
+    - move along
+  - exchange invite to sync to other devices
+    - generate a keypair
+    - sign the exchange message with the invite and send to the server
+      - server verifies the invite
+      - adds the new public key to the peer list and publishes downstream
+    - move along
+
+**** standalone
+in this mode, there is no syncing. this is the most likely first-time run option.
+
+- generate a keypair on startup, so we have a stable fingerprint in the future
+- done
+
+**** pairing
+in this mode, there is syncing to a named realm, but not necessarily server resources consumed
+we don't need an email, since the server is just doing signalling and peer management
+
+- generate an invite from an existing verified peer
+  - ~{ realm:, not_before:, not_after:, inviter: peer.public_key }~
+  - sign that invitation from the existing verified peer
+
+- standalone -> paired
+  - get the invitation somehow (QR code?)
+  - sign an invite exchange with the standalone's public key
+  - send to server
+    - server verifies the invite
+    - adds the new public key to the peer list and publishes downstream
+
+**** server backup
+in this mode, there is syncing to a named realm by email.
+
+goal of server backup mode is that we can go from email->fully working client with latest data without having to have any clients left around that could participate in the sync.
+
+- generate a keypair on startup
+- sign a registration message sent to the server
+  - send a verification email
+    - if email/realm already exists, this is authorization
+    - if not, it's email validation
+  - server starts a realm and associates the public key
+  - server acts as a peer for the realm, and stores private data
+
+- since dexie is publishing change sets, we should be able to just store deltas
+- but we'll need to store _all_ deltas, unless we're materializing on the server side too
+  - should we use an indexdb shim so we can import/export from the server for clean start?
+  - how much materialization does the server need?
+
+
+* ai instructions
+- use 2 spaces for indentation
+- when writing to the devlog, add tags to your entries specifying ~:ai:~ and what tool did it.
+
 * journal
 ** 2025
 *** May 28
 getting everything setup
+
+the biggest open question I have is what sort of privacy/encryption guarantee I need. I want the server to be able to do things like cache and store feed data long-term.
+
+Is "if you want full privacy, self-host" valid?
+
+**** possibilities
+
+- fully PWA
+  - CON: cors, which would require a proxy anyway
+  - CON: audio analysis, llm based stuff for categorization, etc. won't work
+  - PRO: private as all get out
+    - can still do WebRTC p2p sync for resiliancy
+    - can still do server backups, if sync stream is encrypted, but no compaction would be available
+    - could do _explicit_ server backups as dump files
+
+- self hostable
+  - PRO: can do bunches of private stuff on the server, because if you don't want me to see it, do it elsewhere
+  - CON: hard for folk to use
+
+**** sync conflict resolution design discussion                   :ai:claude:
+
+discussed the sync architecture and dexie conflict handling:
+
+**dexie syncable limitations**:
+- logical clocks handle causally-related changes well
+- basic timestamp-based conflict resolution for concurrent updates
+- last-writer-wins for same field conflicts
+- no sophisticated CRDT or vector clock support
+
+**solutions for podcast-specific conflicts**:
+
+- play records: device-specific approach
+  - store separate play_records per device_id
+  - each record: { episode_id, device_id, position, completed, timestamp }
+  - UI handles conflict resolution with "continue from X device?" prompts
+  - avoids arbitrary timestamp wins, gives users control
+
+- subscription trees: parent_path field
+  - store parent_path as single string field ("/Tech/Programming")
+  - simpler than managing folder membership tables
+  - conflicts still possible but contained to single field
+  - could store move operations as events for richer resolution
+
+**other sync considerations**:
+- settings/preferences: distinguish device-local vs global
+- bulk operations: "mark all played" can create duplicate operations
+- metadata updates: server RSS updates vs local renames
+- temporal ordering: recently played lists, queue reordering
+- storage limits: cleanup operations conflicting across devices
+- feed state: refresh timestamps, error states
+
+**approach**: prefer "events not state" pattern and device-specific records where semantic conflicts are likely

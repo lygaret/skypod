@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { useRealmStore } from "./stores";
-import { useIdentStore } from "./stores";
+import { useIdentStore, useRealmStore } from "../stores";
 
 export const Root: React.FC = () => {
   const ident = useIdentStore();

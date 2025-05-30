@@ -1,4 +1,4 @@
-import type { JsonWebKeyPair } from "./types";
+import { jwkSchema, type JwkPair } from "../schema/jwk";
 
 const IdentityKeyAlgo = {
   name: "ECDSA",
@@ -12,18 +12,17 @@ export async function generateKeypair() {
   ]);
 }
 
-export async function exportKeypair(keypair?: CryptoKeyPair) {
-  if (keypair == undefined) return undefined;
+export async function exportKeypair(keypair: CryptoKeyPair): Promise<JwkPair> {
+  const publicJwk = await crypto.subtle.exportKey("jwk", keypair.publicKey);
+  const privateJwk = await crypto.subtle.exportKey("jwk", keypair.privateKey);
 
-  const publicKey = await crypto.subtle.exportKey("jwk", keypair.publicKey);
-  const privateKey = await crypto.subtle.exportKey("jwk", keypair.privateKey);
-
-  return { publicKey, privateKey };
+  return {
+    publicKey: jwkSchema.parse(publicJwk),
+    privateKey: jwkSchema.parse(privateJwk),
+  };
 }
 
-export async function importKeypair(keypair?: JsonWebKeyPair) {
-  if (keypair == undefined) return undefined;
-
+export async function importKeypair(keypair: JwkPair): Promise<CryptoKeyPair> {
   const publicKey = await crypto.subtle.importKey(
     "jwk",
     keypair.publicKey,
@@ -42,9 +41,7 @@ export async function importKeypair(keypair?: JsonWebKeyPair) {
   return { publicKey, privateKey };
 }
 
-export async function fingerprintPublicKey(keypair?: CryptoKeyPair) {
-  if (keypair == undefined) return undefined;
-
+export async function fingerprintPublicKey(keypair: CryptoKeyPair) {
   const spki = await crypto.subtle.exportKey("spki", keypair.publicKey);
   const hash = await crypto.subtle.digest("SHA-256", spki);
 

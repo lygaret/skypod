@@ -1,7 +1,5 @@
 import { create } from "zustand";
 import { createJSONStorage, devtools, persist } from "zustand/middleware";
-import { makePrivateBoundStorage } from "./storage-private-bound";
-import { makeSerdeStorage } from "./storage-serde";
 
 import {
   identStateCreator,
@@ -9,6 +7,8 @@ import {
   identStateSerialize,
 } from "./ident-state";
 import { realmStateCreator } from "./realm-state";
+import { makeSerializerStorage } from "./storage/serializer";
+import { makeInstallBoundStorage } from "./storage/install-bound";
 
 export const useIdentStore = create(
   devtools(
@@ -16,8 +16,8 @@ export const useIdentStore = create(
       // we encrypt in localstorage, with a browser-bound encryption
       // we ignore keypair when serializing, and reimport when merging from storage
       name: "skypod-ident",
-      storage: makeSerdeStorage(
-        makePrivateBoundStorage("skypod-ident", undefined, localStorage),
+      storage: makeSerializerStorage(
+        makeInstallBoundStorage("skypod-ident", undefined, localStorage),
         identStateSerialize,
         identStateDeserialize,
       ),
@@ -25,6 +25,7 @@ export const useIdentStore = create(
     {
       // devtools options
       name: "ident-store",
+      anonymousActionType: "ident/anonymous",
     },
   ),
 );
@@ -36,7 +37,7 @@ export const useRealmStore = create(
       // we encrypt in localstorage, with a browser-bound encryption
       name: "skypod-realm",
       storage: createJSONStorage(() =>
-        makePrivateBoundStorage("skypod-realm", undefined, localStorage),
+        makeInstallBoundStorage("skypod-realm", undefined, localStorage),
       ),
     }),
     {

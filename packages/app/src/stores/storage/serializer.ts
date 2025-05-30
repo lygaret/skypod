@@ -1,7 +1,7 @@
 import { merge } from "ts-deepmerge";
 import type { PersistStorage, StateStorage } from "zustand/middleware";
 
-export function makeSerdeStorage<T, U = any>(
+export function makeSerializerStorage<T, U = any>(
   storage: StateStorage,
   serialize: (state: T) => Promise<U>,
   deserialize: (input: U) => Promise<Partial<T>>,

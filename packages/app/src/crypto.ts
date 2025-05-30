@@ -16,8 +16,8 @@ export function makeCryptoSystem(
   fingerprint: () => string[],
 ): CryptoSystem {
   // common salts
-  const encrSalt = new TextEncoder().encode("${name}-encr-cryptosystem");
-  const hmacSalt = new TextEncoder().encode("${name}-hmac-cryptosystem");
+  const encrSalt = new TextEncoder().encode(`${name}-encr-cryptosystem`);
+  const hmacSalt = new TextEncoder().encode(`${name}-hmac-cryptosystem`);
   const nonceKey = `${name}-nonce`;
 
   // cached data

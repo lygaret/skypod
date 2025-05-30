@@ -3,8 +3,8 @@ import { useRealmStore } from "./stores";
 import { useIdentStore } from "./stores";
 
 export const Root: React.FC = () => {
-  const realm = useRealmStore();
   const ident = useIdentStore();
+  const realm = useRealmStore();
 
   const startNew = async () => {
     try {
@@ -15,16 +15,33 @@ export const Root: React.FC = () => {
     }
   };
 
-  return (
-    <>
-      <React.Suspense fallback={<>Loading...</>}>
-        <pre>{JSON.stringify(realm, null, 4)}</pre>
-      </React.Suspense>
+  const initiateJoin = async () => {};
 
-      <h1>Hello, World</h1>
-      <p>What's up?</p>
-      <pre>{JSON.stringify(ident, null, 4)}</pre>
-      <button onClick={startNew}>Start Realm</button>
-    </>
-  );
+  if (realm.id == null) {
+    return (
+      <>
+        <h1>Welcome</h1>
+        <p>Select an option to get started:</p>
+        <ul>
+          <li>
+            <button onClick={startNew}>Start a New Realm</button>
+          </li>
+          <li>
+            <button onClick={initiateJoin}>Join an Existing Realm</button>
+          </li>
+        </ul>
+      </>
+    );
+  } else {
+    return (
+      <>
+        <h1>
+          Welcome to <code>{realm.id}</code>
+        </h1>
+        <pre>{JSON.stringify(realm, null, 4)}</pre>
+        <h2>Identity</h2>
+        <pre>{JSON.stringify(ident, null, 4)}</pre>
+      </>
+    );
+  }
 };

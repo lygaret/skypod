@@ -1,3 +1,6 @@
+import { UAParser } from "ua-parser-js";
+import { isStandalonePWA } from "ua-parser-js/helpers";
+
 import { z } from "zod";
 import { type StateCreator } from "zustand";
 
@@ -17,8 +20,14 @@ import {
 
 export const identityDataSchema = z.object({
   id: identIdSchema,
-  thumb: z.string(),
+
+  os: z.string(),
+  device: z.string(),
+  browser: z.string(),
+  installed: z.boolean(),
+
   jwks: jwkPairSchema,
+  thumb: z.string(),
 });
 
 export type IdentityData = z.infer<typeof identityDataSchema> & {
@@ -42,20 +51,27 @@ export const identStateCreator: StateCreator<
   [],
   SerializedIdentityState
 > = (set, get) => ({
-  id: undefined,
-  jwks: undefined,
-  keypair: undefined,
-  fingerprint: undefined,
-
   ensure: async () => {
     const self = get();
-    if (!self.id) {
-      const id = generateIdentId();
+    if (!self.keypair) {
       const keypair = await generateKeypair();
-      const jwks = await exportKeypair(keypair);
-      const thumb = await fingerprintPublicKey(keypair);
+      const parser = await UAParser().withFeatureCheck();
 
-      set({ ...self, id, jwks, keypair, thumb }, undefined, "ident/generate");
+      set(
+        {
+          id: generateIdentId(),
+          jwks: await exportKeypair(keypair),
+          thumb: await fingerprintPublicKey(keypair),
+          keypair,
+
+          os: parser.os.toString(),
+          device: parser.device.toString(),
+          browser: parser.browser.toString(),
+          installed: isStandalonePWA(),
+        },
+        undefined,
+        "ident/ensure",
+      );
     }
 
     return get() as Required<IdentityState>;

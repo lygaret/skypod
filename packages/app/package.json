@@ -15,6 +15,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "ts-deepmerge": "^7.0.3",
+    "ua-parser-js": "^2.0.3",
     "zod": "^3.25.40",
     "zustand": "^5.0.5"
   },

@@ -7,7 +7,7 @@ import { type StateCreator } from "zustand";
 import { jwkPairSchema } from "../schema/jwk";
 import { generateIdentId, identIdSchema } from "./ident-id";
 import { generateKeypair, identityKeyAlgo } from "./ident-keys";
-import { exportKeypair, fingerprintKey, importKeypair } from "../crypto";
+import { exportKeypair, fingerprintKey, importKeypair } from "../crypto-keys";
 
 //
 // identity

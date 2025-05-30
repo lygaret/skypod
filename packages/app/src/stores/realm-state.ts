@@ -5,15 +5,14 @@ import { useIdentStore } from ".";
 import { identIdSchema } from "./ident-id";
 import { generateRealmId, realmIdSchema } from "./realm-id";
 import { jwkSchema } from "../schema/jwk";
+import { importCryptoSystem, type CryptoSystem } from "../crypto";
 import {
   deriveKeys,
   encrAlgo,
   exportKey,
   hmacAlgo,
-  importCryptoSystem,
   importKey,
-  type CryptoSystem,
-} from "../crypto";
+} from "../crypto-keys";
 
 //
 // peer identity

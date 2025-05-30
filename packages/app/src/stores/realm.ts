@@ -2,17 +2,17 @@ import { merge } from 'ts-deepmerge'
 import { create, type StateCreator } from 'zustand'
 import { devtools, persist, createJSONStorage } from 'zustand/middleware'
 
-import { generateRealmId, type RealmId } from './realm-id'
 import { useIdentStore } from './ident'
-import type { IdentId } from './ident-id'
-import { createPrivateLocalStorage } from './private-storage'
+import { type IdentId } from './ident-id'
+import { generateRealmId, type RealmId } from './realm-id'
+import { makePrivateBoundStorage } from './private-bound-storage'
 
-export type PeerKey = {
+export interface PeerKey {
   jwk: JsonWebKey,
   fingerprint: string
 }
 
-export type Slice = {
+export interface RealmState {
   id?: RealmId,
   peers: Record<IdentId, PeerKey>,
 
@@ -20,7 +20,7 @@ export type Slice = {
   join: (invite: unknown) => Promise<void>,
 }
 
-const stateCreator: StateCreator<Slice> = (set) => ({
+const stateCreator: StateCreator<RealmState> = (set) => ({
   id: undefined,
   peers: {},
 
@@ -42,15 +42,24 @@ const stateCreator: StateCreator<Slice> = (set) => ({
   }
 });
 
-export const useRealmStore = create<Slice>()(
+export const useRealmStore = create<RealmState>()(
   devtools(
-    persist(stateCreator, {
-      name: 'skypod-realm',
-      storage: createJSONStorage(() => createPrivateLocalStorage<Slice>(['peers'])),
-      merge(persistedState, currentState) {
-        return merge(currentState, persistedState as any) as unknown as Slice;
-      },
+    persist(
+      stateCreator,
+      {
+        // persist options
+        name: 'skypod-realm',
+
+        // we encrypt in localstorage, with a browser-bound encryption
+        storage: createJSONStorage(() => makePrivateBoundStorage(localStorage)),
+
+        merge(persistedState, currentState) {
+          return merge(currentState, persistedState as any) as unknown as RealmState;
+        },
     }),
-    { name: 'realm-store' }
+    {
+      // dev-tools options
+      name: 'realm-store'
+    }
   )
 );

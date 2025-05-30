@@ -5,10 +5,10 @@ import { devtools, persist } from 'zustand/middleware';
 import { generateIdentId, type IdentId } from './ident-id';
 import { exportKeypair, fingerprintPublicKey, generateKeypair, importKeypair } from './ident-keys';
 import { makeSerdeStorage } from './serde-storage';
-import { createPrivateLocalStorage } from './private-storage';
+import { makePrivateBoundStorage } from './private-bound-storage';
 import type { JsonWebKeyPair } from './types';
 
-export type IdentityState = {
+export interface IdentityState {
   id?: IdentId,
 
   jwks?: JsonWebKeyPair,
@@ -17,26 +17,6 @@ export type IdentityState = {
 
   ensure: () => Promise<Required<IdentityState>>,
 }
-
-export type SerializedIdentity =
-  Omit<IdentityState, 'keypair'>
-
-// custom serializer, so that we can store the jwks
-
-const stateStorage = makeSerdeStorage(
-  () => createPrivateLocalStorage<SerializedIdentity>(['jwks']),
-
-  // ignore keypair on flush, reload on read
-
-  async function serialize(state: IdentityState): Promise<SerializedIdentity> {
-    const { keypair, ...rest } = state;
-    return rest;
-  },
-
-  async function deserialize(state) {
-    return { ...state, keypair: await importKeypair(state.jwks) };
-  }
-)
 
 const stateCreator: StateCreator<IdentityState> = (set, get) => ({
   id: undefined,
@@ -59,17 +39,43 @@ const stateCreator: StateCreator<IdentityState> = (set, get) => ({
   }
 })
 
+// custom serializer, so that we can store the jwks
+type SerializedIdentity = Omit<IdentityState, 'keypair'>
+
 export const useIdentStore = create<IdentityState>()(
   devtools(
-    persist(stateCreator,
+    persist(
+      stateCreator,
       {
+        // persist options
         name: 'skypod-identity',
-        storage: stateStorage,
+
+        // we encrypt in localstorage, with a browser-bound encryption
+        storage: makeSerdeStorage(
+          makePrivateBoundStorage(localStorage),
+
+          // since the keypair isn't serializable, but jwk is
+          // ignore keypair on flush, reload on read
+
+          async function serialize(state: IdentityState): Promise<SerializedIdentity> {
+            const { keypair, ...rest } = state;
+            return rest;
+          },
+
+          async function deserialize(state) {
+            return { ...state, keypair: await importKeypair(state.jwks) };
+          }
+        ),
+
+        // deep merge
         merge(persistedState, currentState) {
           return merge(currentState, persistedState as any) as unknown as IdentityState;
         },
       }
     ),
-    { name: 'ident-store' }
+    {
+      // devtools options
+      name: 'ident-store'
+    }
   )
 );

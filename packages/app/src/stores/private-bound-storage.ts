@@ -4,11 +4,12 @@ const ENCRYPTION_NONCE_KEY = '_skypod-nonce';
 const PBKDF2_ITERATIONS = 100000;
 const SALT = new TextEncoder().encode('skypod-private-storage-v1');
 
-type DerivedKeys = {
+interface DerivedKeys {
   encryptionKey: CryptoKey,
   hmacKey: CryptoKey
-};
+}
 
+// "global" cached install nonce
 let cachedInstallNonce: number[] | undefined;
 
 async function getInstallNonce() {
@@ -38,15 +39,11 @@ async function getInstallNonce() {
   return cachedInstallNonce;
 }
 
-async function deriveKeys(): Promise<DerivedKeys> {
+async function deriveInstallKeys(): Promise<DerivedKeys> {
   const nonce = await getInstallNonce();
 
   // Create browser-specific material (stable across sessions)
-  const fingerprint = [
-    navigator.userAgent,
-    location.origin,
-    navigator.language
-  ].join('|');
+  const fingerprint = [navigator.userAgent, location.origin, navigator.language].join('|');
 
   // Combine salt + nonce for key derivation
   const saltWithNonce = new Uint8Array(SALT.length + nonce.length);
@@ -91,7 +88,7 @@ async function deriveKeys(): Promise<DerivedKeys> {
 }
 
 async function encrypt(data: string): Promise<string> {
-  const { encryptionKey, hmacKey } = await deriveKeys();
+  const { encryptionKey, hmacKey } = await deriveInstallKeys();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(data);
 
@@ -123,7 +120,7 @@ async function encrypt(data: string): Promise<string> {
 
 async function decrypt(encryptedData: string): Promise<string> {
   try {
-    const { encryptionKey, hmacKey } = await deriveKeys();
+    const { encryptionKey, hmacKey } = await deriveInstallKeys();
     const final = new Uint8Array(
       atob(encryptedData).split('').map(c => c.charCodeAt(0))
     );
@@ -166,64 +163,24 @@ async function decrypt(encryptedData: string): Promise<string> {
   }
 }
 
-export function createPrivateStorage<T extends Record<string, any>>(
-  baseStorage: StateStorage,
-  privateFields: (keyof T)[]
-): StateStorage {
+export function makePrivateBoundStorage(baseStorage: StateStorage): StateStorage {
   return {
     async getItem(name: string) {
-      const stored = await Promise.resolve(baseStorage.getItem(name));
-      if (!stored) return null;
-
-      try {
-        const { state, version } = JSON.parse(stored);
-
-        // Decrypt private fields
-        for (const field of privateFields) {
-          if (state[field] && typeof state[field] === 'string' && state[field].startsWith('enc:')) {
-            const encryptedData = state[field].slice(4); // Remove 'enc:' prefix
-            state[field] = JSON.parse(await decrypt(encryptedData));
-          }
-        }
-
-        return JSON.stringify({ state, version });
-      } catch (error) {
-        console.error('Failed to decrypt stored data:', error);
-        // Return null to trigger fresh generation
-        return null;
+      let value = await Promise.resolve(baseStorage.getItem(name));
+      if (value && typeof value === 'string' && value.startsWith('enc:')) {
+        value = await decrypt(value.slice(4));
       }
+
+      return value
     },
 
     async setItem(name: string, value: string) {
-      try {
-        const { state, version } = JSON.parse(value);
-
-        // Encrypt private fields
-        for (const field of privateFields) {
-          if (state[field] !== undefined) {
-            const encrypted = await encrypt(JSON.stringify(state[field]));
-            state[field] = `enc:${encrypted}`;
-          }
-        }
-
-        baseStorage.setItem(name, JSON.stringify({ state, version }));
-      } catch (error) {
-        console.error('Failed to encrypt data for storage:', error);
-        throw error;
-      }
+      const encrypted = `enc:${await encrypt(value)}`;
+      baseStorage.setItem(name, encrypted);
     },
 
     removeItem(name: string) {
       baseStorage.removeItem(name);
     }
   };
-}
-
-/**
- * Convenience function for localStorage with encryption
- */
-export function createPrivateLocalStorage<T extends Record<string, any>>(
-  privateFields: (keyof T)[]
-): StateStorage {
-  return createPrivateStorage(localStorage, privateFields);
 }

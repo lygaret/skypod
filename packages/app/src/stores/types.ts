@@ -1,4 +1,4 @@
-export type JsonWebKeyPair = {
+export interface JsonWebKeyPair {
   publicKey: JsonWebKey,
   privateKey: JsonWebKey
 }

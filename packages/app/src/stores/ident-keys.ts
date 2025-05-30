@@ -1,9 +1,12 @@
 import type { JsonWebKeyPair } from "./types";
 
-const IdentityKeyAlgo = { name: 'Ed25519' };
+const IdentityKeyAlgo = {
+  name: "ECDSA",
+  namedCurve: "P-256"
+};
 
 export async function generateKeypair() {
-  return await window.crypto.subtle.generateKey(IdentityKeyAlgo, true, ["sign", "verify"]) as CryptoKeyPair;
+  return await window.crypto.subtle.generateKey(IdentityKeyAlgo, true, ["sign", "verify"]);
 }
 
 export async function exportKeypair(keypair?: CryptoKeyPair) {

@@ -1,4 +1,4 @@
 export interface JsonWebKeyPair {
-  publicKey: JsonWebKey,
-  privateKey: JsonWebKey
+  publicKey: JsonWebKey;
+  privateKey: JsonWebKey;
 }

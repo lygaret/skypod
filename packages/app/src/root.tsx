@@ -1,20 +1,19 @@
-import React from "react"
-import { useRealmStore } from "./stores"
-import { useIdentStore } from "./stores"
+import React from "react";
+import { useRealmStore } from "./stores";
+import { useIdentStore } from "./stores";
 
 export const Root: React.FC = () => {
-  const realm = useRealmStore()
-  const ident = useIdentStore()
+  const realm = useRealmStore();
+  const ident = useIdentStore();
 
   const startNew = async () => {
     try {
-      await realm.create()
-      console.log('realm created!')
+      await realm.create();
+      console.log("realm created!");
+    } catch (e) {
+      console.error("got error", e);
     }
-    catch (e) {
-      console.error('got error', e);
-    }
-  }
+  };
 
   return (
     <>
@@ -27,5 +26,5 @@ export const Root: React.FC = () => {
       <pre>{JSON.stringify(ident, null, 4)}</pre>
       <button onClick={startNew}>Start Realm</button>
     </>
-  )
-}
+  );
+};

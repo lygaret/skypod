@@ -7,7 +7,6 @@
   "scripts": {
     "clean": "rm -rf dist/",
     "build": "tsc",
-
     "start": "npm-run-all -l build -p 'start:**'",
     "start:build": "tsc -i --watch --preserveWatchOutput",
     "start:server": "nodemon --inspect --trace-warnings --no-experimental-strip-types dist/index.js"

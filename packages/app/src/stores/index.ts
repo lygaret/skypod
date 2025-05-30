@@ -1,2 +1,2 @@
-export { useIdentStore } from './ident'
-export { useRealmStore } from './realm'
+export { useIdentStore } from "./ident";
+export { useRealmStore } from "./realm";

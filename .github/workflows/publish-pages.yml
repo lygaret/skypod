@@ -2,7 +2,7 @@ name: Convert Org files to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch: # Allow manual triggering
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -30,7 +30,7 @@ jobs:
       - name: Set up Emacs
         uses: purcell/setup-emacs@master
         with:
-          version: '29.1'
+          version: "29.1"
 
       - name: Convert Org files to HTML
         run: bash .github/workflows/publish-pages/generate.sh
@@ -41,7 +41,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './_site'
+          path: "./_site"
 
       - name: Deploy to GitHub Pages
         id: deployment

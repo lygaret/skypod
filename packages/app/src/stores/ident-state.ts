@@ -89,7 +89,7 @@ export async function identStateSerialize(
 export async function identStateDeserialize(
   rest: SerializedIdentityState,
 ): Promise<IdentityState> {
-  if (rest?.jwks) {
+  if (rest.jwks) {
     const keypair = await importKeypair(rest.jwks, identityKeyAlgo);
     return { ...rest, keypair };
   }

@@ -7,13 +7,13 @@ import { generateRealmId, realmIdSchema } from "./realm-id";
 import { jwkSchema } from "../schema/jwk";
 import {
   deriveKeys,
-  encryptionAlgo,
+  encrAlgo,
   exportKey,
+  hmacAlgo,
   importCryptoSystem,
   importKey,
   type CryptoSystem,
 } from "../crypto";
-import { hmacAlgo } from "../crypto";
 
 //
 // peer identity
@@ -40,7 +40,7 @@ export type PeerIdent = z.infer<typeof peerIdentSchema>;
 export const realmDataSchema = z.object({
   id: realmIdSchema,
   hmacJwk: jwkSchema,
-  encryptionJwk: jwkSchema,
+  encrJwk: jwkSchema,
 
   peers: z.record(identIdSchema, peerIdentSchema),
 });
@@ -76,7 +76,7 @@ export const realmStateCreator: StateCreator<
     const derivedKeys = await deriveKeys(realmId, () => [realmId]);
     const crypto = importCryptoSystem(async () => derivedKeys);
     const hmacJwk = await exportKey(derivedKeys.hmacKey);
-    const encryptionJwk = await exportKey(derivedKeys.encryptionKey);
+    const encrJwk = await exportKey(derivedKeys.encrKey);
 
     // todo: this should save this to the server
     // todo: if the server fails, we can still create a realm, but it won't be signallable; what should we do?
@@ -85,7 +85,7 @@ export const realmStateCreator: StateCreator<
         id: realmId,
         crypto,
         hmacJwk,
-        encryptionJwk,
+        encrJwk,
 
         peers: {
           [ident.id]: {
@@ -147,19 +147,15 @@ export async function realmStateSerialize(
 export async function realmStateDeserialize(
   rest: SerializedRealmState,
 ): Promise<RealmState> {
-  if (rest?.encryptionJwk && rest.hmacJwk) {
-    const crypto = await importCryptoSystem(async () => {
-      const hmacKey = await importKey(rest.hmacJwk!, hmacAlgo, [
-        "sign",
-        "verify",
+  if (rest.encrJwk && rest.hmacJwk) {
+    const { encrJwk, hmacJwk } = rest;
+    const crypto = importCryptoSystem(async () => {
+      const [hmacKey, encrKey] = await Promise.all([
+        importKey(hmacJwk, hmacAlgo, ["sign", "verify"]),
+        importKey(encrJwk, encrAlgo, ["encrypt", "decrypt"]),
       ]);
-      const encryptionKey = await importKey(
-        rest.encryptionJwk!,
-        encryptionAlgo,
-        ["encrypt", "decrypt"],
-      );
 
-      return { encryptionKey, hmacKey };
+      return { encrKey, hmacKey };
     });
 
     return { ...rest, crypto };

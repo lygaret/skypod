@@ -31,5 +31,24 @@ export default tseslint.config(
       },
     },
     plugins: {},
+    rules: {
+      // async gets used often just to auto-return a promise
+      "require-await": "off",
+      "@typescript-eslint/require-await": "off",
+
+      // ignore rest siblings for array destructuring
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          args: "all",
+          argsIgnorePattern: "^_",
+          caughtErrors: "all",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
   },
 );

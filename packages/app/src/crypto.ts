@@ -2,7 +2,7 @@ import { jwkSchema, type JwkObject, type JwkPair } from "./schema/jwk";
 
 // TODO, is there a better way of getting the algo type?
 export type Algo = Parameters<typeof window.crypto.subtle.importKey>[2];
-export const encryptionAlgo: Algo = { name: "AES-GCM", length: 256 };
+export const encrAlgo: Algo = { name: "AES-GCM", length: 256 };
 export const hmacAlgo: Algo = { name: "HMAC", hash: "SHA-256" };
 
 export interface CryptoSystem {
@@ -11,7 +11,7 @@ export interface CryptoSystem {
 }
 
 export interface DerivedKeys {
-  encryptionKey: CryptoKey;
+  encrKey: CryptoKey;
   hmacKey: CryptoKey;
 }
 
@@ -20,7 +20,7 @@ export async function deriveKeys(
   fingerprint: () => string[],
   nonceStr?: string,
   iterations = 100000,
-) {
+): Promise<DerivedKeys> {
   // combine salt + nonce for key derivation
   // derive encryption and hmac keys with different salts
 
@@ -53,10 +53,10 @@ export async function deriveKeys(
   });
 
   return {
-    encryptionKey: await crypto.subtle.deriveKey(
+    encrKey: await crypto.subtle.deriveKey(
       pbkdfAlgo(new Uint8Array([...encrSalt, ...nonce])),
       material,
-      encryptionAlgo,
+      encrAlgo,
       true,
       ["encrypt", "decrypt"],
     ),
@@ -76,13 +76,13 @@ export function importCryptoSystem(
 ): CryptoSystem {
   return {
     async encrypt(data: string): Promise<string> {
-      const { encryptionKey, hmacKey } = await ensureKeys();
+      const { encrKey, hmacKey } = await ensureKeys();
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const encoded = new TextEncoder().encode(data);
 
       const encrypted = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv },
-        encryptionKey,
+        encrKey,
         encoded,
       );
 
@@ -103,7 +103,7 @@ export function importCryptoSystem(
     },
 
     async decrypt(encryptedData: string): Promise<string> {
-      const { encryptionKey, hmacKey } = await ensureKeys();
+      const { encrKey, hmacKey } = await ensureKeys();
       const final = new Uint8Array(
         atob(encryptedData)
           .split("")
@@ -139,7 +139,7 @@ export function importCryptoSystem(
 
       const decrypted = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv },
-        encryptionKey,
+        encrKey,
         encrypted,
       );
 

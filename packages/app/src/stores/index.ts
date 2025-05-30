@@ -1,12 +1,16 @@
 import { create } from "zustand";
-import { createJSONStorage, devtools, persist } from "zustand/middleware";
+import { devtools, persist } from "zustand/middleware";
 
 import {
   identStateCreator,
   identStateDeserialize,
   identStateSerialize,
 } from "./ident-state";
-import { realmStateCreator } from "./realm-state";
+import {
+  realmStateCreator,
+  realmStateDeserialize,
+  realmStateSerialize,
+} from "./realm-state";
 import { makeSerializerStorage } from "./storage/serializer";
 import { makeInstallBoundStorage } from "./storage/install-bound";
 
@@ -36,8 +40,10 @@ export const useRealmStore = create(
       // persist options
       // we encrypt in localstorage, with a browser-bound encryption
       name: "skypod-realm",
-      storage: createJSONStorage(() =>
+      storage: makeSerializerStorage(
         makeInstallBoundStorage("skypod-realm", undefined, localStorage),
+        realmStateSerialize,
+        realmStateDeserialize,
       ),
     }),
     {

@@ -1,8 +1,8 @@
 import type { StateStorage } from "zustand/middleware";
-import { makeCryptoSystem } from "../../crypto";
+import { deriveCryptoSystem } from "../../crypto";
 
 function isEncryptionEnabled(enabled?: boolean) {
-  return enabled === undefined ? !import.meta.env.DEV : enabled;
+  return enabled ?? !import.meta.env.DEV;
 }
 
 function isEncryptedValue(value?: unknown): value is string {
@@ -20,10 +20,10 @@ export function makeInstallBoundStorage(
 ): StateStorage {
   if (!isEncryptionEnabled(encrypt)) return baseStorage;
 
-  const crypto = makeCryptoSystem(name, true, fingerprintInstall);
+  const crypto = deriveCryptoSystem(name, true, fingerprintInstall);
   return {
     async getItem(name: string) {
-      let value = await Promise.resolve(baseStorage.getItem(name));
+      const value = await Promise.resolve(baseStorage.getItem(name));
       if (!isEncryptedValue(value)) {
         return null;
       }

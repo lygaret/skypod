@@ -6,12 +6,8 @@ import { type StateCreator } from "zustand";
 
 import { jwkPairSchema } from "../schema/jwk";
 import { generateIdentId, identIdSchema } from "./ident-id";
-import {
-  exportKeypair,
-  fingerprintPublicKey,
-  generateKeypair,
-  importKeypair,
-} from "./ident-keys";
+import { generateKeypair, identityKeyAlgo } from "./ident-keys";
+import { exportKeypair, fingerprintKey, importKeypair } from "../crypto";
 
 //
 // identity
@@ -34,9 +30,9 @@ export type IdentityData = z.infer<typeof identityDataSchema> & {
   keypair: CryptoKeyPair;
 };
 
-export type IdentityActions = {
+export interface IdentityActions {
   ensure: () => Promise<Required<IdentityState>>;
-};
+}
 
 export type IdentityState = Partial<IdentityData> & IdentityActions;
 export type SerializedIdentityState = Omit<IdentityState, "keypair">;
@@ -61,7 +57,7 @@ export const identStateCreator: StateCreator<
         {
           id: generateIdentId(),
           jwks: await exportKeypair(keypair),
-          thumb: await fingerprintPublicKey(keypair),
+          thumb: await fingerprintKey(keypair.publicKey),
           keypair,
 
           os: parser.os.toString(),
@@ -93,8 +89,8 @@ export async function identStateSerialize(
 export async function identStateDeserialize(
   rest: SerializedIdentityState,
 ): Promise<IdentityState> {
-  if (rest && rest.jwks) {
-    const keypair = await importKeypair(rest.jwks);
+  if (rest?.jwks) {
+    const keypair = await importKeypair(rest.jwks, identityKeyAlgo);
     return { ...rest, keypair };
   }
 

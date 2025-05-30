@@ -5,6 +5,15 @@ import { useIdentStore } from ".";
 import { identIdSchema } from "./ident-id";
 import { generateRealmId, realmIdSchema } from "./realm-id";
 import { jwkSchema } from "../schema/jwk";
+import {
+  deriveKeys,
+  encryptionAlgo,
+  exportKey,
+  importCryptoSystem,
+  importKey,
+  type CryptoSystem,
+} from "../crypto";
+import { hmacAlgo } from "../crypto";
 
 //
 // peer identity
@@ -17,7 +26,7 @@ export const peerIdentSchema = z.object({
   browser: z.string(),
   installed: z.boolean(),
 
-  pubicJwks: jwkSchema,
+  publicJwk: jwkSchema,
   publicThumb: z.string(),
 });
 
@@ -30,17 +39,25 @@ export type PeerIdent = z.infer<typeof peerIdentSchema>;
 
 export const realmDataSchema = z.object({
   id: realmIdSchema,
+  hmacJwk: jwkSchema,
+  encryptionJwk: jwkSchema,
+
   peers: z.record(identIdSchema, peerIdentSchema),
 });
 
-export type RealmData = z.infer<typeof realmDataSchema>;
-
-export type RealmActions = {
-  create: () => Promise<void>;
-  join: (invite: unknown) => Promise<void>;
+export type RealmData = z.infer<typeof realmDataSchema> & {
+  crypto: CryptoSystem;
 };
 
+export interface RealmActions {
+  create: () => Promise<void>;
+
+  generateInvite: () => Promise<unknown>;
+  exchangeInvite: (invite: unknown, sharedkey: unknown) => Promise<void>;
+}
+
 export type RealmState = Partial<RealmData> & RealmActions;
+export type SerializedRealmState = Omit<RealmState, "crypto">;
 
 //
 // creator
@@ -53,13 +70,23 @@ export const realmStateCreator: StateCreator<
   RealmState
 > = (set) => ({
   create: async () => {
+    const realmId = generateRealmId();
     const ident = await useIdentStore.getState().ensure();
+
+    const derivedKeys = await deriveKeys(realmId, () => [realmId]);
+    const crypto = importCryptoSystem(async () => derivedKeys);
+    const hmacJwk = await exportKey(derivedKeys.hmacKey);
+    const encryptionJwk = await exportKey(derivedKeys.encryptionKey);
 
     // todo: this should save this to the server
     // todo: if the server fails, we can still create a realm, but it won't be signallable; what should we do?
     set(
       {
-        id: generateRealmId(),
+        id: realmId,
+        crypto,
+        hmacJwk,
+        encryptionJwk,
+
         peers: {
           [ident.id]: {
             id: ident.id,
@@ -68,7 +95,7 @@ export const realmStateCreator: StateCreator<
             browser: ident.browser,
             installed: ident.installed,
 
-            pubicJwks: ident.jwks.publicKey,
+            publicJwk: ident.jwks.publicKey,
             publicThumb: ident.thumb,
           },
         },
@@ -78,7 +105,65 @@ export const realmStateCreator: StateCreator<
     );
   },
 
-  join: async (_invite: unknown) => {
-    // todo
+  generateInvite: async () => {
+    // TODO
+    // the plan:
+    //   * generate ephemeral keypair
+    //   * encrypt the shared realm key with the ephemeral key
+    //   * post to signalling server:
+    //     - ~{ realm_id, invite_id, ephemeral_public, encrypted_realm_key }~
+    //   * generate QR code with two JWTs embedded
+    //     - ~{ realm_id, invite_id, issuer: ident.jwks.public_key }~
+    //       - signed by me, so server knows who created it
+    //     - ~{ realm_id, invite_id, ephemeral_private }~
+    //       - signed with ephemeral private key
+    //   * trash the keys
+  },
+
+  exchangeInvite: async (_invite, _sharedkey) => {
+    // TODO
+    // the plan
+    //   * submit invite to server, to get invite info
+    //     - ~{ realm_id, invite_id, ephemeral_public, encrypted_realm_key }~
+    //   * verify sharedkey signature with ephemeral_public from invite
+    //     - ~{ realm_id, invite_id, ephemeral_private }~
+    //   * use ephemeral_private to decrypt realm_key
+    //   * trash the keys
   },
 });
+
+//
+// serialization
+// we omit the keys during serialization, since they're non-enumerable,
+// and we rebuild it on deserialization from the jwks
+
+export async function realmStateSerialize(
+  state: RealmState,
+): Promise<SerializedRealmState> {
+  const { crypto, ...rest } = state;
+  return rest;
+}
+
+export async function realmStateDeserialize(
+  rest: SerializedRealmState,
+): Promise<RealmState> {
+  if (rest?.encryptionJwk && rest.hmacJwk) {
+    const crypto = await importCryptoSystem(async () => {
+      const hmacKey = await importKey(rest.hmacJwk!, hmacAlgo, [
+        "sign",
+        "verify",
+      ]);
+      const encryptionKey = await importKey(
+        rest.encryptionJwk!,
+        encryptionAlgo,
+        ["encrypt", "decrypt"],
+      );
+
+      return { encryptionKey, hmacKey };
+    });
+
+    return { ...rest, crypto };
+  }
+
+  return rest;
+}

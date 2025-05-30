@@ -11,7 +11,7 @@ export type inferBrandedIdType<T extends z.ZodType<any>> = z.infer<T>;
 
 export function makeBrandedId(prefix: string, length: number = 16) {
   const brand = escapeRegExp(prefix);
-  const pattern = `${brand}-[A-Za-z0-9_-]{${length}}`;
+  const pattern = `${brand}-[A-Za-z0-9_-]{${length.toString()}}`;
   const regex = new RegExp(pattern);
 
   const schema = z.string().regex(regex).brand(Symbol(brand));

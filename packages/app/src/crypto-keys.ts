@@ -3,6 +3,16 @@ import { jwkSchema, type JwkObject, type JwkPair } from "./schema/jwk";
 // TODO, is there a better way of getting the algo type?
 export type Algo = Parameters<typeof window.crypto.subtle.importKey>[2];
 export const encrAlgo: Algo = { name: "AES-GCM", length: 256 };
+export const signAlgo: Algo = { name: "ECDSA", namedCurve: "P-256" };
+
+// signinge key generation
+
+export async function generateSigningKeypair(): Promise<CryptoKeyPair> {
+  return (await crypto.subtle.generateKey(signAlgo, true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair;
+}
 
 /**
  * derives encryption key using PBKDF2 from password
@@ -30,7 +40,7 @@ export async function deriveKey(
   );
 
   const salt = encoder.encode(`${saltStr}-salt-cryptosystem`);
-  const nonce = encoder.encode(`${nonceStr}-nonce-${Date.now().toString()}`);
+  const nonce = encoder.encode(`${nonceStr}-nonce-cryptosystem`);
   const pbkdfAlgo = {
     name: "PBKDF2",
     hash: "SHA-256",

@@ -7,7 +7,9 @@ import { type StateCreator } from "zustand";
 import {
   exportKeypair,
   fingerprintKey,
+  generateSigningKeypair,
   importKeypair,
+  signAlgo,
 } from "../../crypto-keys";
 import { jwkPairSchema } from "../../schema/jwk";
 import { makeBrandedId, type inferBrandedId } from "../../schema/branded-id";
@@ -22,17 +24,6 @@ export const {
   validator: validateIdentId,
   schema: identIdSchema,
 } = identIdBrand;
-
-// identity key generation
-
-const identityKeyAlgo = { name: "ECDSA", namedCurve: "P-256" };
-
-async function generateKeypair() {
-  return await crypto.subtle.generateKey(identityKeyAlgo, true, [
-    "sign",
-    "verify",
-  ]);
-}
 
 // the state object
 
@@ -82,7 +73,7 @@ export const identStateCreator: StateCreator<
   ensure: async () => {
     const self = get();
     if (!self.keypair) {
-      const keypair = await generateKeypair();
+      const keypair = await generateSigningKeypair();
       const parser = await UAParser().withFeatureCheck();
 
       set(
@@ -129,7 +120,7 @@ export async function identStateDeserialize(
   rest: SerializedIdentityState,
 ): Promise<IdentityState> {
   if (rest.jwks) {
-    const keypair = await importKeypair(rest.jwks, identityKeyAlgo);
+    const keypair = await importKeypair(rest.jwks, signAlgo);
     return { ...rest, keypair };
   }
 

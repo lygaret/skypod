@@ -19,10 +19,6 @@ export function makeInstallBoundStorage(
 ): StateStorage {
   if (!isEncryptionEnabled(encrypt)) return baseStorage;
 
-  function fingerprintInstall() {
-    return [location.origin, navigator.language, navigator.userAgent];
-  }
-
   async function ensureNonce() {
     const key = `nonce:${name}`;
     let nonce = await baseStorage.getItem(key);
@@ -36,11 +32,7 @@ export function makeInstallBoundStorage(
 
   let crypto: CryptoSystem | undefined;
   async function ensureCrypto() {
-    return (crypto ??= deriveCryptoSystem(
-      fingerprintInstall,
-      name,
-      await ensureNonce(),
-    ));
+    return (crypto ??= deriveCryptoSystem(name, location.origin, await ensureNonce()));
   }
 
   return {

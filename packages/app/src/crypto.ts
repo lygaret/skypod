@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { deriveKeys, type DerivedKeys } from "./crypto-keys";
 
 /** encrypt/decrypt using AES-GCM with HMAC authentication */
@@ -17,24 +18,27 @@ export interface CryptoSystem {
 }
 
 /**
- * creates a crypto system with key derivation from device fingerprints
- * if a stable salt/nonce and fingerprint is given, the derived keys will be stable
+ * creates a crypto system with key derivation
+ * if a stable password/salt/nonce is given, the derived keys will be stable
  *
- * @param fingerprint - function returning derivation fingerprint strings
+ * @param password - string to use for deriving the encryption keys
  * @param salt - string to use as a solt prefix (probably the crypto system name)
  * @param nonce - second string to use as a solt prefix (probably a random string stored locally)
  * @returns crypto system with keys derived from fingerprints and nonce
  */
 export function deriveCryptoSystem(
-  fingerprint: () => string[],
+  password?: string,
   salt?: string,
   nonce?: string,
 ): CryptoSystem {
-  return importCryptoSystem(async () => {
-    salt ??= crypto.randomUUID();
-    nonce ??= crypto.randomUUID();
+  const orRandom = (s?: string) => s ?? nanoid(32);
 
-    return await deriveKeys(fingerprint, salt, nonce);
+  return importCryptoSystem(async () => {
+    return await deriveKeys(
+      orRandom(password),
+      orRandom(salt),
+      orRandom(nonce),
+    );
   });
 }
 

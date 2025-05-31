@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import { jwkSchema, type JwkObject, type JwkPair } from "./schema/jwk";
 
 // TODO, is there a better way of getting the algo type?
@@ -23,16 +22,13 @@ export interface DerivedKeys {
  * @returns encryption and HMAC keys for authenticated encryption
  */
 export async function deriveKeys(
-  fingerprint: () => string[],
-  saltStr?: string,
-  nonceStr?: string,
+  passwordStr: string,
+  saltStr: string,
+  nonceStr: string,
   iterations = 100000,
 ): Promise<DerivedKeys> {
   // combine salt + nonce for key derivation
   // derive encryption and hmac keys with different salts
-
-  saltStr ??= nanoid();
-  nonceStr ??= nanoid();
 
   const encoder = new TextEncoder();
   const encrSalt = encoder.encode(`${saltStr}-encr-cryptosystem`);
@@ -41,8 +37,7 @@ export async function deriveKeys(
 
   // fingerprints as PBKDF inputs
 
-  const printdata = fingerprint().join("|");
-  const encoded = new TextEncoder().encode(printdata);
+  const encoded = new TextEncoder().encode(passwordStr);
   const material = await crypto.subtle.importKey(
     "raw",
     encoded,

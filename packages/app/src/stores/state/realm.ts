@@ -113,7 +113,7 @@ export const realmStateCreator: StateCreator<
     const nonce = nanoid(32);
     console.log("recovery key:", { realmId, nonce });
 
-    const derivedKeys = await deriveKeys(() => [realmId], realmId, nonce);
+    const derivedKeys = await deriveKeys(realmId, realmId, nonce);
     const hmacJwk = await exportKey(derivedKeys.hmacKey);
     const encrJwk = await exportKey(derivedKeys.encrKey);
     const crypto = importCryptoSystem(async () => derivedKeys);

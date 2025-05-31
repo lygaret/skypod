@@ -4,16 +4,42 @@ import { isStandalonePWA } from "ua-parser-js/helpers";
 import { z } from "zod";
 import { type StateCreator } from "zustand";
 
-import { jwkPairSchema } from "../schema/jwk";
-import { generateIdentId, identIdSchema } from "./ident-id";
-import { generateKeypair, identityKeyAlgo } from "./ident-keys";
-import { exportKeypair, fingerprintKey, importKeypair } from "../crypto-keys";
+import {
+  exportKeypair,
+  fingerprintKey,
+  importKeypair,
+} from "../../crypto-keys";
+import { jwkPairSchema } from "../../schema/jwk";
+import { makeBrandedId, type inferBrandedId } from "../../schema/branded-id";
 
-//
-// identity
-// a _device_ identity with keypairs (in easy to store/use formats)
-// we don't make any differentiation between users, just devices in a realm
+// branded id
 
+const identIdBrand = makeBrandedId("idt", 24);
+
+export type IdentId = inferBrandedId<typeof identIdBrand>;
+export const {
+  generator: generateIdentId,
+  validator: validateIdentId,
+  schema: identIdSchema,
+} = identIdBrand;
+
+// identity key generation
+
+const identityKeyAlgo = { name: "ECDSA", namedCurve: "P-256" };
+
+async function generateKeypair() {
+  return await crypto.subtle.generateKey(identityKeyAlgo, true, [
+    "sign",
+    "verify",
+  ]);
+}
+
+// the state object
+
+/**
+ * device identity with keypairs and device information
+ * we don't differentiate between users, just devices in a realm
+ */
 export const identityDataSchema = z.object({
   id: identIdSchema,
 
@@ -26,26 +52,32 @@ export const identityDataSchema = z.object({
   thumb: z.string(),
 });
 
+/** complete identity data including runtime keypair */
 export type IdentityData = z.infer<typeof identityDataSchema> & {
   keypair: CryptoKeyPair;
 };
 
+/** actions available on the identity store */
 export interface IdentityActions {
+  /**
+   * ensures the device has a complete identity, generating one if needed
+   * @returns complete identity state with keypair and device info
+   */
   ensure: () => Promise<Required<IdentityState>>;
 }
 
 export type IdentityState = Partial<IdentityData> & IdentityActions;
 export type SerializedIdentityState = Omit<IdentityState, "keypair">;
 
-//
-// creator
-// assumes the store is created in a persisted+devtools context
-
+/**
+ * state creator for identity management
+ * assumes the store is created in a persisted+devtools context
+ */
 export const identStateCreator: StateCreator<
   IdentityState,
   [["zustand/devtools", never], ["zustand/persist", unknown]],
   [],
-  SerializedIdentityState
+  IdentityState
 > = (set, get) => ({
   ensure: async () => {
     const self = get();
@@ -74,11 +106,12 @@ export const identStateCreator: StateCreator<
   },
 });
 
-//
-// serialization
-// we omit the keypair during serialization, since it's non-enumerable,
-// and we rebuild it on deserialization from the jwks
-
+/**
+ * serializes identity state for persistence
+ * omits the keypair since it's non-enumerable and rebuilt from jwks
+ * @param state - identity state to serialize
+ * @returns serializable state without keypair
+ */
 export async function identStateSerialize(
   state: IdentityState,
 ): Promise<SerializedIdentityState> {
@@ -86,6 +119,12 @@ export async function identStateSerialize(
   return rest;
 }
 
+/**
+ * deserializes identity state from persistence
+ * rebuilds the keypair from stored jwks if available
+ * @param rest - serialized identity state
+ * @returns identity state with reconstructed keypair
+ */
 export async function identStateDeserialize(
   rest: SerializedIdentityState,
 ): Promise<IdentityState> {

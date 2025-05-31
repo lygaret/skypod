@@ -1,16 +1,61 @@
 import { deriveKeys, type DerivedKeys } from "./crypto-keys";
 
+/** encrypt/decrypt using AES-GCM with HMAC authentication */
 export interface CryptoSystem {
+  /**
+   * @param data - plaintext string to encrypt
+   * @returns base64-encoded encrypted data with IV and HMAC signature
+   */
   encrypt(input: string): Promise<string>;
+
+  /**
+   * @param encryptedData - base64-encoded encrypted data with IV and HMAC
+   * @returns original plaintext string
+   * @throws {Error} if HMAC verification fails or data is corrupted
+   */
   decrypt(input: string): Promise<string>;
 }
 
+/**
+ * creates a crypto system with key derivation from device fingerprints
+ * if a stable salt/nonce and fingerprint is given, the derived keys will be stable
+ *
+ * @param fingerprint - function returning derivation fingerprint strings
+ * @param salt - string to use as a solt prefix (probably the crypto system name)
+ * @param nonce - second string to use as a solt prefix (probably a random string stored locally)
+ * @returns crypto system with keys derived from fingerprints and nonce
+ */
+export function deriveCryptoSystem(
+  fingerprint: () => string[],
+  salt?: string,
+  nonce?: string,
+): CryptoSystem {
+  return importCryptoSystem(async () => {
+    salt ??= crypto.randomUUID();
+    nonce ??= crypto.randomUUID();
+
+    return await deriveKeys(fingerprint, salt, nonce);
+  });
+}
+
+/**
+ * creates a crypto system from a key provider function
+ * key function won't be called until needed
+ *
+ * @param ensureKeys - function that returns encryption and HMAC keys
+ * @returns crypto system with encrypt/decrypt methods
+ */
 export function importCryptoSystem(
   ensureKeys: () => Promise<DerivedKeys>,
 ): CryptoSystem {
+  let cachedKeys: DerivedKeys | undefined;
+  const fetchKeys = async () => {
+    return (cachedKeys ??= await ensureKeys());
+  };
+
   return {
     async encrypt(data: string): Promise<string> {
-      const { encrKey, hmacKey } = await ensureKeys();
+      const { encrKey, hmacKey } = await fetchKeys();
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const encoded = new TextEncoder().encode(data);
 
@@ -37,7 +82,7 @@ export function importCryptoSystem(
     },
 
     async decrypt(encryptedData: string): Promise<string> {
-      const { encrKey, hmacKey } = await ensureKeys();
+      const { encrKey, hmacKey } = await fetchKeys();
       const final = new Uint8Array(
         atob(encryptedData)
           .split("")
@@ -80,44 +125,4 @@ export function importCryptoSystem(
       return new TextDecoder().decode(decrypted);
     },
   };
-}
-
-export function deriveCryptoSystem(
-  name: string,
-  storage: boolean,
-  fingerprint: () => string[],
-): CryptoSystem {
-  let cachedNonce: string | undefined;
-  let cachedDerivedKeys: DerivedKeys | undefined;
-
-  // ensure we have a nonce for the crypto system
-  // if there's no storage, we only hold it in memory
-  function ensureNonce(): string {
-    if (cachedNonce) return cachedNonce;
-
-    // stored?
-    const nonceKey = `${name}-nonce`;
-    if (storage) {
-      const stored = localStorage.getItem(nonceKey);
-      if (stored) return stored;
-    }
-
-    // generate if not stored
-    const values = crypto.getRandomValues(new Uint8Array(32));
-    const nonce = btoa(String.fromCharCode(...values));
-    if (storage) {
-      localStorage.setItem(nonceKey, nonce);
-    }
-
-    // cache and return
-    return (cachedNonce = nonce);
-  }
-
-  // fingerprints derive a shared password for generating keys
-  // if fingerprints aren't available, the key is protected only by the nonce
-
-  return importCryptoSystem(async () => {
-    cachedDerivedKeys ??= await deriveKeys(name, fingerprint, ensureNonce());
-    return cachedDerivedKeys;
-  });
 }

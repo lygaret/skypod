@@ -1,23 +1,38 @@
+import { nanoid } from "nanoid";
 import { type StateCreator } from "zustand";
 import { z } from "zod";
 
-import { useIdentStore } from ".";
-import { identIdSchema } from "./ident-id";
-import { generateRealmId, realmIdSchema } from "./realm-id";
-import { jwkSchema } from "../schema/jwk";
-import { importCryptoSystem, type CryptoSystem } from "../crypto";
+import { importCryptoSystem, type CryptoSystem } from "../../crypto";
 import {
   deriveKeys,
   encrAlgo,
   exportKey,
   hmacAlgo,
   importKey,
-} from "../crypto-keys";
+} from "../../crypto-keys";
+import { jwkSchema } from "../../schema/jwk";
+import { type inferBrandedId, makeBrandedId } from "../../schema/branded-id";
 
-//
-// peer identity
-// enough to identify and use their public key
+import { useIdentStore } from "..";
+import { identIdSchema } from "./ident";
 
+// branded id
+
+const brand = makeBrandedId("rlm", 16);
+
+export type RealmId = inferBrandedId<typeof brand>;
+export const {
+  generator: generateRealmId,
+  validator: validateRealmId,
+  schema: realmIdSchema,
+} = brand;
+
+// the state object
+
+/**
+ * peer identity schema with public key information
+ * contains enough information to identify and verify a peer device
+ */
 export const peerIdentSchema = z.object({
   id: identIdSchema,
   os: z.string(),
@@ -29,13 +44,15 @@ export const peerIdentSchema = z.object({
   publicThumb: z.string(),
 });
 
+/**
+ * peer identity data type
+ */
 export type PeerIdent = z.infer<typeof peerIdentSchema>;
 
-//
-// realm
-// a common key-space for peers that sync
-// eventually server sync will be a peer too
-
+/**
+ * realm schema defining a shared keyspace for peer synchronization
+ * eventually server sync will be a peer too
+ */
 export const realmDataSchema = z.object({
   id: realmIdSchema,
   hmacJwk: jwkSchema,
@@ -44,24 +61,44 @@ export const realmDataSchema = z.object({
   peers: z.record(identIdSchema, peerIdentSchema),
 });
 
+/** complete realm data including runtime crypto system */
 export type RealmData = z.infer<typeof realmDataSchema> & {
   crypto: CryptoSystem;
 };
 
+/** actions available on the realm store */
 export interface RealmActions {
+  /**
+   * creates a new realm with the current device as the first peer
+   * generates encryption keys and establishes the peer list
+   */
   create: () => Promise<void>;
 
+  /**
+   * generates an invitation for other devices to join this realm
+   *
+   * @returns invitation data for QR code or other sharing methods
+   * @todo implement JWT-based invitation system with ephemeral keys
+   */
   generateInvite: () => Promise<unknown>;
+
+  /**
+   * processes an invitation to join an existing realm
+   *
+   * @param invite - invitation data from another device
+   * @param sharedkey - shared key for accessing realm encryption
+   * @todo implement invitation verification and realm key decryption
+   */
   exchangeInvite: (invite: unknown, sharedkey: unknown) => Promise<void>;
 }
 
 export type RealmState = Partial<RealmData> & RealmActions;
 export type SerializedRealmState = Omit<RealmState, "crypto">;
 
-//
-// creator
-// assumes the state is created in a persisted+devtools context
-
+/**
+ * state creator for realm management
+ * assumes the state is created in a persisted+devtools context
+ */
 export const realmStateCreator: StateCreator<
   RealmState,
   [["zustand/devtools", never], ["zustand/persist", unknown]],
@@ -72,10 +109,14 @@ export const realmStateCreator: StateCreator<
     const realmId = generateRealmId();
     const ident = await useIdentStore.getState().ensure();
 
-    const derivedKeys = await deriveKeys(realmId, () => [realmId]);
-    const crypto = importCryptoSystem(async () => derivedKeys);
+    // todo: we should show this somewhere; if these are known, we can rederive keys
+    const nonce = nanoid(32);
+    console.log("recovery key:", { realmId, nonce });
+
+    const derivedKeys = await deriveKeys(() => [realmId], realmId, nonce);
     const hmacJwk = await exportKey(derivedKeys.hmacKey);
     const encrJwk = await exportKey(derivedKeys.encrKey);
+    const crypto = importCryptoSystem(async () => derivedKeys);
 
     // todo: this should save this to the server
     // todo: if the server fails, we can still create a realm, but it won't be signallable; what should we do?
@@ -131,11 +172,12 @@ export const realmStateCreator: StateCreator<
   },
 });
 
-//
-// serialization
-// we omit the keys during serialization, since they're non-enumerable,
-// and we rebuild it on deserialization from the jwks
-
+/**
+ * serializes realm state for persistence
+ * omits the crypto system since it's non-enumerable and rebuilt from jwks
+ * @param state - realm state to serialize
+ * @returns serializable state without crypto system
+ */
 export async function realmStateSerialize(
   state: RealmState,
 ): Promise<SerializedRealmState> {
@@ -143,6 +185,12 @@ export async function realmStateSerialize(
   return rest;
 }
 
+/**
+ * deserializes realm state from persistence
+ * rebuilds the crypto system from stored jwks if available
+ * @param rest - serialized realm state
+ * @returns realm state with reconstructed crypto system
+ */
 export async function realmStateDeserialize(
   rest: SerializedRealmState,
 ): Promise<RealmState> {

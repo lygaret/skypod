@@ -37,12 +37,14 @@ const symmetricKeySchema = baseJWKSchema.extend({
   k: z.string(), // Required for symmetric keys
 });
 
+/** JsonWebKey */
 export const jwkSchema = z.discriminatedUnion("kty", [
   rsaKeySchema,
   ecKeySchema,
   symmetricKeySchema,
 ]);
 
+/** JSONWebKey Pair */
 export const jwkPairSchema = z.object({
   publicKey: jwkSchema,
   privateKey: jwkSchema,

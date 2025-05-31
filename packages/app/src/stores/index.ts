@@ -5,12 +5,12 @@ import {
   identStateCreator,
   identStateDeserialize,
   identStateSerialize,
-} from "./ident-state";
+} from "./state/ident";
 import {
   realmStateCreator,
   realmStateDeserialize,
   realmStateSerialize,
-} from "./realm-state";
+} from "./state/realm";
 import { makeSerializerStorage } from "./storage/serializer";
 import { makeInstallBoundStorage } from "./storage/install-bound";
 

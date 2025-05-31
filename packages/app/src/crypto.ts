@@ -1,18 +1,18 @@
 import { nanoid } from "nanoid";
-import { deriveKeys, type DerivedKeys } from "./crypto-keys";
+import { deriveKey } from "./crypto-keys";
 
-/** encrypt/decrypt using AES-GCM with HMAC authentication */
+/** encrypt/decrypt using AES-GCM authenticated encryption */
 export interface CryptoSystem {
   /**
    * @param data - plaintext string to encrypt
-   * @returns base64-encoded encrypted data with IV and HMAC signature
+   * @returns base64-encoded encrypted data with IV and authentication tag
    */
   encrypt(input: string): Promise<string>;
 
   /**
-   * @param encryptedData - base64-encoded encrypted data with IV and HMAC
+   * @param encryptedData - base64-encoded encrypted data with IV and authentication tag
    * @returns original plaintext string
-   * @throws {Error} if HMAC verification fails or data is corrupted
+   * @throws {Error} if authentication fails or data is corrupted
    */
   decrypt(input: string): Promise<string>;
 }
@@ -34,11 +34,7 @@ export function deriveCryptoSystem(
   const orRandom = (s?: string) => s ?? nanoid(32);
 
   return importCryptoSystem(async () => {
-    return await deriveKeys(
-      orRandom(password),
-      orRandom(salt),
-      orRandom(nonce),
-    );
+    return await deriveKey(orRandom(password), orRandom(salt), orRandom(nonce));
   });
 }
 
@@ -46,20 +42,24 @@ export function deriveCryptoSystem(
  * creates a crypto system from a key provider function
  * key function won't be called until needed
  *
- * @param ensureKeys - function that returns encryption and HMAC keys
+ * encryption with aes-gcm, random iv
+ * this gives us authenticated, so we don't need another hmac
+ * TODO: is this correct?
+ *
+ * @param ensureKeys - function that returns encryption key
  * @returns crypto system with encrypt/decrypt methods
  */
 export function importCryptoSystem(
-  ensureKeys: () => Promise<DerivedKeys>,
+  ensureKeys: () => Promise<CryptoKey>,
 ): CryptoSystem {
-  let cachedKeys: DerivedKeys | undefined;
-  const fetchKeys = async () => {
-    return (cachedKeys ??= await ensureKeys());
+  let cachedKey: CryptoKey | undefined;
+  const fetchKey = async () => {
+    return (cachedKey ??= await ensureKeys());
   };
 
   return {
     async encrypt(data: string): Promise<string> {
-      const { encrKey, hmacKey } = await fetchKeys();
+      const encrKey = await fetchKey();
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const encoded = new TextEncoder().encode(data);
 
@@ -69,54 +69,23 @@ export function importCryptoSystem(
         encoded,
       );
 
-      // Combine IV + encrypted data
+      // Combine IV + encrypted data (which includes auth tag)
       const combined = new Uint8Array(iv.length + encrypted.byteLength);
       combined.set(iv);
       combined.set(new Uint8Array(encrypted), iv.length);
 
-      // Generate HMAC of the encrypted data
-      const hmacSignature = await crypto.subtle.sign("HMAC", hmacKey, combined);
-
-      // Combine encrypted data + HMAC signature
-      const final = new Uint8Array(combined.length + hmacSignature.byteLength);
-      final.set(combined);
-      final.set(new Uint8Array(hmacSignature), combined.length);
-
-      return btoa(String.fromCharCode(...final));
+      return btoa(String.fromCharCode(...combined));
     },
 
     async decrypt(encryptedData: string): Promise<string> {
-      const { encrKey, hmacKey } = await fetchKeys();
-      const final = new Uint8Array(
+      const encrKey = await fetchKey();
+      const combined = new Uint8Array(
         atob(encryptedData)
           .split("")
           .map((c) => c.charCodeAt(0)),
       );
 
-      // Split encrypted data and HMAC (HMAC-SHA256 is 32 bytes)
-      const hmacSize = 32;
-      if (final.length < hmacSize) {
-        throw new Error("Invalid encrypted data: too short for HMAC");
-      }
-
-      const combined = final.slice(0, -hmacSize);
-      const storedHmac = final.slice(-hmacSize);
-
-      // Verify HMAC
-      const isValid = await crypto.subtle.verify(
-        "HMAC",
-        hmacKey,
-        storedHmac,
-        combined,
-      );
-
-      if (!isValid) {
-        throw new Error(
-          "HMAC verification failed: data may have been tampered with",
-        );
-      }
-
-      // Extract IV and encrypted data
+      // Extract IV and encrypted data (which includes auth tag)
       const iv = combined.slice(0, 12);
       const encrypted = combined.slice(12);
 

@@ -3,75 +3,45 @@ import { jwkSchema, type JwkObject, type JwkPair } from "./schema/jwk";
 // TODO, is there a better way of getting the algo type?
 export type Algo = Parameters<typeof window.crypto.subtle.importKey>[2];
 export const encrAlgo: Algo = { name: "AES-GCM", length: 256 };
-export const hmacAlgo: Algo = { name: "HMAC", hash: "SHA-256" };
 
 /**
- * encryption and authentication keys for a crypto system
- */
-export interface DerivedKeys {
-  encrKey: CryptoKey;
-  hmacKey: CryptoKey;
-}
-
-/**
- * derives encryption and HMAC keys using PBKDF2 from device fingerprints
- * @param name - unique name for salt generation
- * @param fingerprint - function returning device fingerprint strings
- * @param nonceStr - optional nonce string, generates timestamped one if not provided
+ * derives encryption key using PBKDF2 from password
+ * @param passwordStr - password string for key derivation
+ * @param saltStr - salt string for key derivation
+ * @param nonceStr - nonce string for key derivation
  * @param iterations - PBKDF2 iterations, defaults to 100,000
- * @returns encryption and HMAC keys for authenticated encryption
+ * @returns encryption key for AES-GCM authenticated encryption
  */
-export async function deriveKeys(
+export async function deriveKey(
   passwordStr: string,
   saltStr: string,
   nonceStr: string,
   iterations = 100000,
-): Promise<DerivedKeys> {
-  // combine salt + nonce for key derivation
-  // derive encryption and hmac keys with different salts
-
+): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const encrSalt = encoder.encode(`${saltStr}-encr-cryptosystem`);
-  const hmacSalt = encoder.encode(`${saltStr}-hmac-cryptosystem`);
-  const nonce = encoder.encode(`${nonceStr}-nonce-${Date.now().toString()}`);
 
-  // fingerprints as PBKDF inputs
-
-  const encoded = new TextEncoder().encode(passwordStr);
+  const password = encoder.encode(`${passwordStr}-pass-cryptosystem`);
   const material = await crypto.subtle.importKey(
     "raw",
-    encoded,
+    password,
     "PBKDF2",
     false,
     ["deriveKey"],
   );
 
-  // and finally return the derived keys
-
-  const pbkdfAlgo = (salt: Uint8Array) => ({
+  const salt = encoder.encode(`${saltStr}-salt-cryptosystem`);
+  const nonce = encoder.encode(`${nonceStr}-nonce-${Date.now().toString()}`);
+  const pbkdfAlgo = {
     name: "PBKDF2",
     hash: "SHA-256",
-    salt,
+    salt: new Uint8Array([...salt, ...nonce]),
     iterations,
-  });
-
-  return {
-    encrKey: await crypto.subtle.deriveKey(
-      pbkdfAlgo(new Uint8Array([...encrSalt, ...nonce])),
-      material,
-      encrAlgo,
-      true,
-      ["encrypt", "decrypt"],
-    ),
-
-    hmacKey: await crypto.subtle.deriveKey(
-      pbkdfAlgo(new Uint8Array([...hmacSalt, ...nonce])),
-      material,
-      hmacAlgo,
-      true,
-      ["sign", "verify"],
-    ),
   };
+
+  return await crypto.subtle.deriveKey(pbkdfAlgo, material, encrAlgo, true, [
+    "encrypt",
+    "decrypt",
+  ]);
 }
 
 /**
@@ -131,7 +101,7 @@ export async function importKeypair(
 }
 
 /**
- * generates a SHA-256 fingerprint of a public key
+ * generates a fingerprint of a public key
  * @param key - CryptoKey to fingerprint (should be a public key)
  * @returns hexadecimal string fingerprint of the key
  */

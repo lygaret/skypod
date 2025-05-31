@@ -32,7 +32,11 @@ export function makeInstallBoundStorage(
 
   let crypto: CryptoSystem | undefined;
   async function ensureCrypto() {
-    return (crypto ??= deriveCryptoSystem(name, location.origin, await ensureNonce()));
+    return (crypto ??= deriveCryptoSystem(
+      name,
+      location.origin,
+      await ensureNonce(),
+    ));
   }
 
   return {

@@ -3,13 +3,7 @@ import { type StateCreator } from "zustand";
 import { z } from "zod";
 
 import { importCryptoSystem, type CryptoSystem } from "../../crypto";
-import {
-  deriveKeys,
-  encrAlgo,
-  exportKey,
-  hmacAlgo,
-  importKey,
-} from "../../crypto-keys";
+import { deriveKey, encrAlgo, exportKey, importKey } from "../../crypto-keys";
 import { jwkSchema } from "../../schema/jwk";
 import { type inferBrandedId, makeBrandedId } from "../../schema/branded-id";
 
@@ -55,8 +49,7 @@ export type PeerIdent = z.infer<typeof peerIdentSchema>;
  */
 export const realmDataSchema = z.object({
   id: realmIdSchema,
-  hmacJwk: jwkSchema,
-  encrJwk: jwkSchema,
+  jwk: jwkSchema,
 
   peers: z.record(identIdSchema, peerIdentSchema),
 });
@@ -113,19 +106,17 @@ export const realmStateCreator: StateCreator<
     const nonce = nanoid(32);
     console.log("recovery key:", { realmId, nonce });
 
-    const derivedKeys = await deriveKeys(realmId, realmId, nonce);
-    const hmacJwk = await exportKey(derivedKeys.hmacKey);
-    const encrJwk = await exportKey(derivedKeys.encrKey);
-    const crypto = importCryptoSystem(async () => derivedKeys);
+    const encrKey = await deriveKey(realmId, realmId, nonce);
+    const encrJwk = await exportKey(encrKey);
+    const crypto = importCryptoSystem(async () => encrKey);
 
     // todo: this should save this to the server
     // todo: if the server fails, we can still create a realm, but it won't be signallable; what should we do?
     set(
       {
         id: realmId,
+        jwk: encrJwk,
         crypto,
-        hmacJwk,
-        encrJwk,
 
         peers: {
           [ident.id]: {
@@ -194,15 +185,10 @@ export async function realmStateSerialize(
 export async function realmStateDeserialize(
   rest: SerializedRealmState,
 ): Promise<RealmState> {
-  if (rest.encrJwk && rest.hmacJwk) {
-    const { encrJwk, hmacJwk } = rest;
+  if (rest.jwk) {
+    const { jwk } = rest; // in case rest changes before async call
     const crypto = importCryptoSystem(async () => {
-      const [hmacKey, encrKey] = await Promise.all([
-        importKey(hmacJwk, hmacAlgo, ["sign", "verify"]),
-        importKey(encrJwk, encrAlgo, ["encrypt", "decrypt"]),
-      ]);
-
-      return { encrKey, hmacKey };
+      return await importKey(jwk, encrAlgo, ["encrypt", "decrypt"]);
     });
 
     return { ...rest, crypto };
